@@ -6,10 +6,47 @@ const AppContext = createContext();
 export const useAppContext = () => useContext(AppContext);
 
 export const AppProvider = ({ children }) => {
-  const [plantingZones, setPlantingZones] = useState(initialPlantingZones);
-  const [inventory, setInventory] = useState(initialInventory);
-  const [farmLogs, setFarmLogs] = useState(initialFarmLogs);
-  const [user, setUser] = useState(null); // { role: 'admin' | 'farmer', name: '...' }
+  // Initialize state from LocalStorage or fallback to mockData
+  const [plantingZones, setPlantingZones] = useState(() => {
+    const saved = localStorage.getItem('agripro_plantingZones');
+    return saved ? JSON.parse(saved) : initialPlantingZones;
+  });
+  
+  const [inventory, setInventory] = useState(() => {
+    const saved = localStorage.getItem('agripro_inventory');
+    return saved ? JSON.parse(saved) : initialInventory;
+  });
+  
+  const [farmLogs, setFarmLogs] = useState(() => {
+    const saved = localStorage.getItem('agripro_farmLogs');
+    return saved ? JSON.parse(saved) : initialFarmLogs;
+  });
+  
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('agripro_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Save to LocalStorage whenever state changes
+  useEffect(() => {
+    localStorage.setItem('agripro_plantingZones', JSON.stringify(plantingZones));
+  }, [plantingZones]);
+
+  useEffect(() => {
+    localStorage.setItem('agripro_inventory', JSON.stringify(inventory));
+  }, [inventory]);
+
+  useEffect(() => {
+    localStorage.setItem('agripro_farmLogs', JSON.stringify(farmLogs));
+  }, [farmLogs]);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('agripro_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('agripro_user');
+    }
+  }, [user]);
 
   // Auth functions
   const login = (role, name) => {
