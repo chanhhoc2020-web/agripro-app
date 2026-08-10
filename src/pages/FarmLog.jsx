@@ -25,6 +25,7 @@ const FarmLog = () => {
     inventory_item_id: '',
     quantity_used: '',
     notes: '',
+    photo_url: '',
   });
 
   const activeZones = plantingZones.filter(z => z.status === 'Active');
@@ -39,32 +40,51 @@ const FarmLog = () => {
         inventory_item_id: formData.inventory_item_id || null,
         quantity_used: Number(formData.quantity_used) || 0,
         operator_name: user?.name,
-        photo_url: '',
+        photo_url: formData.photo_url,
         notes: formData.notes
       });
       setShowAddLog(false);
       setSelectedAction(null);
       setErrorMsg('');
-      setFormData({ puc_code: '', inventory_item_id: '', quantity_used: '', notes: '' });
+      setFormData({ puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '' });
     } catch (err) {
       setErrorMsg(err.message);
     }
   };
 
   const startVoiceInput = () => {
-    if ('webkitSpeechRecognition' in window) {
-      const recognition = new window.webkitSpeechRecognition();
-      recognition.lang = 'vi-VN';
-      recognition.start();
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setFormData(prev => ({ ...prev, notes: prev.notes + ' ' + transcript }));
-      };
-      recognition.onerror = () => {
-        alert("Lỗi nhận diện giọng nói");
-      };
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'vi-VN';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          setFormData(prev => ({ ...prev, notes: prev.notes ? prev.notes + ' ' + transcript : transcript }));
+        };
+        
+        recognition.onerror = (event) => {
+          alert(`Lỗi nhận diện giọng nói: ${event.error}. Vui lòng cấp quyền Micro hoặc thử lại.`);
+        };
+        
+        recognition.start();
+      } catch (err) {
+        alert("Có lỗi xảy ra khi khởi động Micro. Vui lòng thử lại.");
+      }
     } else {
-      alert("Trình duyệt không hỗ trợ nhập liệu bằng giọng nói");
+      alert("Trình duyệt điện thoại của bạn không hỗ trợ nhận diện giọng nói (Ví dụ: một số bản iOS cũ hoặc trình duyệt nhúng). Vui lòng gõ tay.");
+    }
+  };
+
+  const handlePhotoCapture = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Create a local preview URL
+      const url = URL.createObjectURL(file);
+      setFormData(prev => ({ ...prev, photo_url: url }));
     }
   };
 
@@ -166,9 +186,23 @@ const FarmLog = () => {
             </div>
 
             <div className="input-group">
-              <button type="button" className="btn btn-outline" style={{ width: '100%', padding: '16px', display: 'flex', gap: '8px', borderStyle: 'dashed' }}>
-                <Camera size={24} /> Chụp ảnh minh chứng
-              </button>
+              <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
+                Ảnh minh chứng
+                {formData.photo_url && (
+                  <img src={formData.photo_url} alt="Minh chứng" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', marginTop: '8px' }} />
+                )}
+              </label>
+              
+              <label className="btn btn-outline" style={{ width: '100%', padding: '16px', display: 'flex', gap: '8px', borderStyle: 'dashed', cursor: 'pointer', justifyContent: 'center' }}>
+                <Camera size={24} /> {formData.photo_url ? 'Chụp lại ảnh' : 'Chụp ảnh minh chứng'}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment" 
+                  style={{ display: 'none' }} 
+                  onChange={handlePhotoCapture}
+                />
+              </label>
             </div>
 
             <button type="submit" className="btn btn-primary btn-large" style={{ width: '100%', marginTop: 'var(--spacing-4)', padding: '16px', fontSize: '1.125rem' }}>
@@ -219,6 +253,9 @@ const FarmLog = () => {
                 )}
                 {log.notes && (
                   <p style={{ marginTop: '4px', fontStyle: 'italic', color: 'var(--text-secondary)' }}>"{log.notes}"</p>
+                )}
+                {log.photo_url && (
+                  <img src={log.photo_url} alt="Hình ảnh minh chứng" style={{ width: '100%', maxWidth: '200px', height: '120px', objectFit: 'cover', borderRadius: 'var(--radius-md)', marginTop: '8px', border: '1px solid var(--border)' }} />
                 )}
               </div>
             </div>
