@@ -1,29 +1,43 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAppContext } from '../context/AppContext';
 import { MapPin, Sprout, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 const TraceabilityPage = () => {
   const { hash } = useParams();
+  const [searchParams] = useSearchParams();
   const { plantingZones, farmLogs, inventory, batches, addBatch } = useAppContext();
 
-  const currentBatch = batches?.find(b => b.hash === hash) || null;
+  // Retrieve data from URL query params (if scanned by phone) or local storage
+  const urlPuc = searchParams.get('puc');
+  const urlYield = searchParams.get('yield');
+  const urlDate = searchParams.get('date');
+
+  const currentBatch = batches?.find(b => b.hash === hash) || {
+    pucCode: urlPuc,
+    yieldAmt: urlYield,
+    harvestDate: urlDate
+  };
+  
   const activePucCode = currentBatch?.pucCode || plantingZones[0]?.puc_code;
   const zone = plantingZones.find(z => z.puc_code === activePucCode) || plantingZones[0];
   const logs = farmLogs.filter(l => l.puc_code === zone?.puc_code).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   
-  const [generatedHash, setGeneratedHash] = React.useState('demo-hash-123');
+  const [generatedHash, setGeneratedHash] = React.useState('BATCH-DEMO123');
   const [formData, setFormData] = React.useState({
     pucCode: zone?.puc_code || '',
     harvestDate: new Date().toISOString().split('T')[0],
     yieldAmt: 1000
   });
-  
-  const qrUrl = `${window.location.origin}/trace/${hash || generatedHash}`;
 
   // Check if we are viewing the public page (not logged in) or generating it
   const isGenerating = !hash;
+  
+  // Embed data directly into the QR URL so the phone can read it without a backend database
+  const qrUrl = isGenerating 
+    ? `${window.location.origin}/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}`
+    : window.location.href;
 
   const downloadQRCode = () => {
     const canvas = document.getElementById('qr-canvas');
@@ -89,7 +103,7 @@ const TraceabilityPage = () => {
               Quét mã này để xem thông tin truy xuất nguồn gốc.
             </p>
             <div className="flex gap-2" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Link to={`/trace/${generatedHash}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
+              <Link to={`/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
               <button className="btn btn-outline" onClick={downloadQRCode}>Tải ảnh QR</button>
               <button className="btn btn-primary" onClick={() => window.print()}>In Tem Nhãn</button>
             </div>
@@ -125,7 +139,7 @@ const TraceabilityPage = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--success)', fontWeight: 600, backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: '4px 12px', borderRadius: '50px' }}>
                 <ShieldCheck size={18} /> An toàn (Đạt chuẩn PHI)
               </div>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Mã lô: BATCH-{hash?.substring(0,6).toUpperCase()}</p>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Mã lô: {hash?.toUpperCase() || 'N/A'}</p>
             </div>
           </div>
           
