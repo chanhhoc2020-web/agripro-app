@@ -1,54 +1,26 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { initialPlantingZones, initialInventory, initialFarmLogs, bannedIngredients } from '../mockData';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { bannedIngredients as mockBannedIngredients } from '../mockData';
 
 const AppContext = createContext();
 
 export const useAppContext = () => useContext(AppContext);
 
 export const AppProvider = ({ children }) => {
-  // Initialize state from LocalStorage or fallback to mockData
-  const [plantingZones, setPlantingZones] = useState(() => {
-    const saved = localStorage.getItem('agripro_plantingZones');
-    return saved ? JSON.parse(saved) : initialPlantingZones;
-  });
-  
-  const [inventory, setInventory] = useState(() => {
-    const saved = localStorage.getItem('agripro_inventory');
-    return saved ? JSON.parse(saved) : initialInventory;
-  });
-  
-  const [farmLogs, setFarmLogs] = useState(() => {
-    const saved = localStorage.getItem('agripro_farmLogs');
-    return saved ? JSON.parse(saved) : initialFarmLogs;
-  });
-  
-  const [batches, setBatches] = useState(() => {
-    const saved = localStorage.getItem('agripro_batches');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [plantingZones, setPlantingZones] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [farmLogs, setFarmLogs] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('agripro_user');
     return saved ? JSON.parse(saved) : null;
   });
+  
+  // We keep banned ingredients hardcoded for now, or fetch if needed
+  const bannedIngredients = mockBannedIngredients;
 
-  // Save to LocalStorage whenever state changes
-  useEffect(() => {
-    localStorage.setItem('agripro_plantingZones', JSON.stringify(plantingZones));
-  }, [plantingZones]);
-
-  useEffect(() => {
-    localStorage.setItem('agripro_inventory', JSON.stringify(inventory));
-  }, [inventory]);
-
-  useEffect(() => {
-    localStorage.setItem('agripro_farmLogs', JSON.stringify(farmLogs));
-  }, [farmLogs]);
-
-  useEffect(() => {
-    localStorage.setItem('agripro_batches', JSON.stringify(batches));
-  }, [batches]);
-
+  // Sync User to localStorage (Mock Auth for now, can upgrade to Firebase Auth later)
   useEffect(() => {
     if (user) {
       localStorage.setItem('agripro_user', JSON.stringify(user));
@@ -56,6 +28,29 @@ export const AppProvider = ({ children }) => {
       localStorage.removeItem('agripro_user');
     }
   }, [user]);
+
+  // Firestore Realtime Listeners
+  useEffect(() => {
+    const unsubZones = onSnapshot(collection(db, 'planting_zones'), (snapshot) => {
+      setPlantingZones(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
+      setInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubLogs = onSnapshot(collection(db, 'farm_logs'), (snapshot) => {
+      setFarmLogs(snapshot.docs.map(doc => ({ log_id: doc.id, ...doc.data() })));
+    });
+    const unsubBatches = onSnapshot(collection(db, 'batches'), (snapshot) => {
+      setBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubZones();
+      unsubInventory();
+      unsubLogs();
+      unsubBatches();
+    };
+  }, []);
 
   // Auth functions
   const login = (role, name) => {
@@ -67,62 +62,56 @@ export const AppProvider = ({ children }) => {
   };
 
   // Planting Zone functions
-  const addZone = (zone) => {
-    setPlantingZones([...plantingZones, { ...zone, id: Date.now().toString() }]);
+  const addZone = async (zone) => {
+    await addDoc(collection(db, 'planting_zones'), zone);
   };
 
-  const updateZone = (id, updatedZone) => {
-    setPlantingZones(plantingZones.map(z => z.id === id ? { ...z, ...updatedZone } : z));
+  const updateZone = async (id, updatedZone) => {
+    await updateDoc(doc(db, 'planting_zones', id), updatedZone);
   };
 
-  const deleteZone = (id) => {
-    setPlantingZones(plantingZones.filter(z => z.id !== id));
+  const deleteZone = async (id) => {
+    await deleteDoc(doc(db, 'planting_zones', id));
   };
 
   // Inventory functions
-  const addInventoryItem = (item) => {
-    // Check for banned ingredient before adding
+  const addInventoryItem = async (item) => {
     const isBanned = bannedIngredients.some(b => 
       item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
     );
-    
     if (isBanned) {
       throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
     }
-
-    setInventory([...inventory, { ...item, id: `inv-${Date.now()}` }]);
+    await addDoc(collection(db, 'inventory'), item);
   };
 
-  const updateStock = (id, quantityChange) => {
-    setInventory(inventory.map(item => 
-      item.id === id 
-        ? { ...item, current_stock: item.current_stock + quantityChange } 
-        : item
-    ));
+  const updateStock = async (id, quantityChange) => {
+    const item = inventory.find(i => i.id === id);
+    if (item) {
+      await updateDoc(doc(db, 'inventory', id), {
+        current_stock: item.current_stock + quantityChange
+      });
+    }
   };
 
   // Farm Log functions
-  const addFarmLog = (log) => {
-    // 1. If using inventory item (Phun thuốc / Bón phân)
+  const addFarmLog = async (log) => {
+    // 1. If using inventory item
     if (log.inventory_item_id) {
       const item = inventory.find(i => i.id === log.inventory_item_id);
       if (item) {
-        // Check Banned Ingredient
         const isBanned = bannedIngredients.some(b => 
           item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
         );
         if (isBanned) {
           throw new Error(`CẢNH BÁO: Thuốc này chứa hoạt chất cấm. Không thể lưu nhật ký!`);
         }
-        
-        // Deduct inventory
-        updateStock(item.id, -log.quantity_used);
+        await updateStock(item.id, -log.quantity_used);
       }
     }
 
-    // 2. If harvesting, check PHI (Pre-Harvest Interval)
+    // 2. If harvesting, check PHI
     if (log.action_type === 'Thu hoạch') {
-      // Find all pesticide logs for this PUC
       const pesticideLogs = farmLogs.filter(
         l => l.puc_code === log.puc_code && 
         l.inventory_item_id && 
@@ -133,8 +122,6 @@ export const AppProvider = ({ children }) => {
         const item = inventory.find(i => i.id === pLog.inventory_item_id);
         const sprayDate = new Date(pLog.timestamp);
         const harvestDate = new Date(log.timestamp);
-        
-        // Calculate safe harvest date
         const safeHarvestDate = new Date(sprayDate);
         safeHarvestDate.setDate(safeHarvestDate.getDate() + (item.phi_days || 0));
 
@@ -145,11 +132,11 @@ export const AppProvider = ({ children }) => {
       }
     }
 
-    setFarmLogs([...farmLogs, { ...log, log_id: `log-${Date.now()}` }]);
+    await addDoc(collection(db, 'farm_logs'), log);
   };
 
-  const addBatch = (batch) => {
-    setBatches([...batches, batch]);
+  const addBatch = async (batch) => {
+    await addDoc(collection(db, 'batches'), batch);
   };
 
   return (
