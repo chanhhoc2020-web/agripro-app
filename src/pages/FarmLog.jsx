@@ -21,6 +21,7 @@ const FarmLog = () => {
   const [errorMsg, setErrorMsg] = useState('');
   
   const [formData, setFormData] = useState({
+    cropName: '',
     puc_code: '',
     inventory_item_id: '',
     quantity_used: '',
@@ -55,10 +56,18 @@ const FarmLog = () => {
 
   const activeZones = plantingZones.filter(z => z.status === 'Active');
 
+  React.useEffect(() => {
+    const selectedZone = activeZones.find(z => z.puc_code === formData.puc_code);
+    if (selectedZone && selectedZone.crop_type) {
+      setFormData(prev => ({ ...prev, cropName: selectedZone.crop_type }));
+    }
+  }, [formData.puc_code, activeZones]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       await addFarmLog({
+        cropName: formData.cropName,
         puc_code: formData.puc_code,
         action_type: selectedAction.name,
         timestamp: new Date().toISOString(),
@@ -72,7 +81,7 @@ const FarmLog = () => {
       setShowAddLog(false);
       setSelectedAction(null);
       setErrorMsg('');
-      setFormData({ puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '', location: null });
+      setFormData({ cropName: '', puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '', location: null });
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -206,6 +215,11 @@ const FarmLog = () => {
             )}
             
             <div className="input-group">
+              <label className="input-label" style={{ fontSize: '1rem' }}>Tên trái cây / Sản phẩm</label>
+              <input type="text" className="input-field" style={{ padding: '12px', fontSize: '1rem' }} value={formData.cropName} onChange={e => setFormData({...formData, cropName: e.target.value})} placeholder="VD: Sầu riêng Ri6" />
+            </div>
+
+            <div className="input-group">
               <label className="input-label" style={{ fontSize: '1rem' }}>Chọn vùng trồng (PUC)</label>
               <select className="input-field" style={{ padding: '12px', fontSize: '1rem' }} required value={formData.puc_code} onChange={e => setFormData({...formData, puc_code: e.target.value})}>
                 <option value="">-- Chọn lô đất --</option>
@@ -329,6 +343,7 @@ const FarmLog = () => {
               
               <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', display: 'grid', gap: '4px' }}>
                 <p><strong>Vùng trồng:</strong> {zone ? `${zone.puc_code} - ${zone.zone_name}` : log.puc_code}</p>
+                <p><strong>Sản phẩm:</strong> {log.cropName || zone?.crop_type || 'N/A'}</p>
                 <p><strong>Người thực hiện:</strong> {log.operator_name}</p>
                 {item && (
                   <p><strong>Vật tư:</strong> {item.item_name} (Dùng: {log.quantity_used} {item.unit})</p>
