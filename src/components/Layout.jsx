@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, MapPin, Package, ClipboardList, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, MapPin, Package, ClipboardList, LogOut, Menu, X, QrCode } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import '../index.css';
 
@@ -19,6 +19,7 @@ const Layout = () => {
     { name: 'Vùng Trồng (PUC)', path: '/puc', icon: MapPin, roles: ['admin'] },
     { name: 'Kho Vật Tư', path: '/inventory', icon: Package, roles: ['admin', 'farmer'] },
     { name: 'Nhật Ký (FarmLog)', path: '/farmlog', icon: ClipboardList, roles: ['admin', 'farmer'] },
+    { name: 'Tạo mã QR', path: '/qr-generate', icon: QrCode, roles: ['admin'] },
   ];
 
   const allowedNavItems = navItems.filter(item => item.roles.includes(user?.role));

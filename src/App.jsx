@@ -58,6 +58,13 @@ function AppRoutes() {
             <FarmLog />
           </ProtectedRoute>
         } />
+
+        {/* QR Generator - Admin only */}
+        <Route path="qr-generate" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <TraceabilityPage />
+          </ProtectedRoute>
+        } />
       </Route>
     </Routes>
   );
