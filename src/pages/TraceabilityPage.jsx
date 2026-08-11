@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { useAppContext } from '../context/AppContext';
 import { MapPin, Sprout, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
@@ -20,6 +20,19 @@ const TraceabilityPage = () => {
 
   // Check if we are viewing the public page (not logged in) or generating it
   const isGenerating = !hash;
+
+  const downloadQRCode = () => {
+    const canvas = document.getElementById('qr-canvas');
+    if (canvas) {
+      const pngUrl = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.href = pngUrl;
+      downloadLink.download = `QR_Code_${generatedHash}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+  };
 
   if (isGenerating) {
     return (
@@ -60,13 +73,14 @@ const TraceabilityPage = () => {
           <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <h3 style={{ marginBottom: 'var(--spacing-4)', alignSelf: 'flex-start' }}>Mã QR của lô hàng</h3>
             <div style={{ padding: 'var(--spacing-4)', backgroundColor: 'white', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', marginBottom: 'var(--spacing-4)' }}>
-              <QRCodeSVG value={qrUrl} size={200} />
+              <QRCodeCanvas id="qr-canvas" value={qrUrl} size={200} />
             </div>
             <p style={{ textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-4)' }}>
               Quét mã này để xem thông tin truy xuất nguồn gốc.
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-2" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
               <Link to={`/trace/${generatedHash}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
+              <button className="btn btn-outline" onClick={downloadQRCode}>Tải ảnh QR</button>
               <button className="btn btn-primary" onClick={() => window.print()}>In Tem Nhãn</button>
             </div>
           </div>
