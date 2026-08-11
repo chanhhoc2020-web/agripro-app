@@ -14,8 +14,10 @@ const TraceabilityPage = () => {
   const urlYield = searchParams.get('yield');
   const urlDate = searchParams.get('date');
   const urlFarmer = searchParams.get('farmer');
+  const urlCrop = searchParams.get('crop');
 
   const currentBatch = batches?.find(b => b.hash === hash) || {
+    cropName: urlCrop,
     pucCode: urlPuc,
     yieldAmt: urlYield,
     harvestDate: urlDate,
@@ -28,6 +30,7 @@ const TraceabilityPage = () => {
   
   const [generatedHash, setGeneratedHash] = React.useState('BATCH-DEMO123');
   const [formData, setFormData] = React.useState({
+    cropName: zone?.crop_type || '',
     pucCode: zone?.puc_code || '',
     harvestDate: new Date().toISOString().split('T')[0],
     yieldAmt: 1000,
@@ -42,12 +45,19 @@ const TraceabilityPage = () => {
     }
   }, [formData.pucCode, farmLogs]);
 
+  React.useEffect(() => {
+    const selectedZone = plantingZones.find(z => z.puc_code === formData.pucCode);
+    if (selectedZone && selectedZone.crop_type) {
+      setFormData(prev => ({ ...prev, cropName: selectedZone.crop_type }));
+    }
+  }, [formData.pucCode, plantingZones]);
+
   // Check if we are viewing the public page (not logged in) or generating it
   const isGenerating = !hash;
   
   // Embed data directly into the QR URL so the phone can read it without a backend database
   const qrUrl = isGenerating 
-    ? `${window.location.origin}/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}&farmer=${encodeURIComponent(formData.farmerName)}`
+    ? `${window.location.origin}/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}&farmer=${encodeURIComponent(formData.farmerName)}&crop=${encodeURIComponent(formData.cropName)}`
     : window.location.href;
 
   const downloadQRCode = () => {
@@ -71,6 +81,10 @@ const TraceabilityPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="card">
             <h3 style={{ marginBottom: 'var(--spacing-4)' }}>Thông tin lô hàng</h3>
+            <div className="input-group">
+              <label className="input-label">Tên trái cây / Sản phẩm</label>
+              <input type="text" className="input-field" value={formData.cropName} onChange={e => setFormData({...formData, cropName: e.target.value})} placeholder="VD: Sầu riêng Ri6" />
+            </div>
             <div className="input-group">
               <label className="input-label">Mã Vùng Trồng (PUC)</label>
               <select className="input-field" value={formData.pucCode} onChange={e => setFormData({...formData, pucCode: e.target.value})}>
@@ -101,6 +115,7 @@ const TraceabilityPage = () => {
                 setGeneratedHash(newHash);
                 addBatch({
                   hash: newHash,
+                  cropName: formData.cropName,
                   pucCode: formData.pucCode,
                   harvestDate: formData.harvestDate,
                   yieldAmt: formData.yieldAmt,
@@ -122,7 +137,7 @@ const TraceabilityPage = () => {
               Quét mã này để xem thông tin truy xuất nguồn gốc.
             </p>
             <div className="flex gap-2" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Link to={`/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}&farmer=${encodeURIComponent(formData.farmerName)}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
+              <Link to={`/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}&farmer=${encodeURIComponent(formData.farmerName)}&crop=${encodeURIComponent(formData.cropName)}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
               <button className="btn btn-outline" onClick={downloadQRCode}>Tải ảnh QR</button>
               <button className="btn btn-primary" onClick={() => window.print()}>In Tem Nhãn</button>
             </div>
@@ -149,7 +164,7 @@ const TraceabilityPage = () => {
         <div className="card" style={{ marginBottom: 'var(--spacing-6)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <h2 style={{ color: 'var(--primary-dark)', marginBottom: '4px', fontSize: '1.5rem' }}>{zone?.crop_type || 'N/A'}</h2>
+              <h2 style={{ color: 'var(--primary-dark)', marginBottom: '4px', fontSize: '1.5rem' }}>{currentBatch?.cropName || zone?.crop_type || 'N/A'}</h2>
               <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <MapPin size={16} /> {zone?.location_address || 'N/A'}
               </p>
