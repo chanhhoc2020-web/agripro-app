@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, Camera, Mic, Tractor, Droplet, Bug, Scissors, Wheat, X } from 'lucide-react';
+import { Plus, Camera, Mic, Tractor, Droplet, Bug, Scissors, Wheat, X, MapPin } from 'lucide-react';
 
 const ACTION_TYPES = [
   { id: 'lam_dat', name: 'Làm đất', icon: Tractor, color: '#3B82F6' },
@@ -26,7 +26,32 @@ const FarmLog = () => {
     quantity_used: '',
     notes: '',
     photo_url: '',
+    location: null,
   });
+
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      setFormData(prev => ({ ...prev, location: 'loading' }));
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setFormData(prev => ({ 
+            ...prev, 
+            location: { 
+              lat: position.coords.latitude, 
+              lng: position.coords.longitude 
+            } 
+          }));
+        },
+        (error) => {
+          setFormData(prev => ({ ...prev, location: null }));
+          alert("Không thể lấy vị trí. Vui lòng cấp quyền định vị GPS cho trình duyệt.");
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
+    }
+  };
 
   const activeZones = plantingZones.filter(z => z.status === 'Active');
 
@@ -41,12 +66,13 @@ const FarmLog = () => {
         quantity_used: Number(formData.quantity_used) || 0,
         operator_name: user?.name,
         photo_url: formData.photo_url,
-        notes: formData.notes
+        notes: formData.notes,
+        location: formData.location !== 'loading' ? formData.location : null
       });
       setShowAddLog(false);
       setSelectedAction(null);
       setErrorMsg('');
-      setFormData({ puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '' });
+      setFormData({ puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '', location: null });
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -219,6 +245,30 @@ const FarmLog = () => {
 
             <div className="input-group">
               <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
+                Định vị bản đồ (GPS)
+                {formData.location && formData.location !== 'loading' && (
+                  <span style={{ fontSize: '0.875rem', color: 'var(--success)', marginTop: '4px' }}>
+                    ✓ Đã ghi nhận tọa độ ({formData.location.lat.toFixed(5)}, {formData.location.lng.toFixed(5)})
+                  </span>
+                )}
+                {formData.location === 'loading' && (
+                  <span style={{ fontSize: '0.875rem', color: 'var(--primary)', marginTop: '4px' }}>
+                    Đang tìm vệ tinh...
+                  </span>
+                )}
+              </label>
+              
+              <button 
+                type="button"
+                className="btn btn-outline" 
+                onClick={handleGetLocation}
+                style={{ width: '100%', padding: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                <MapPin size={20} /> Lấy vị trí hiện tại
+              </button>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
                 Ảnh minh chứng
                 {formData.photo_url && (
                   <img src={formData.photo_url} alt="Minh chứng" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', marginTop: '8px' }} />
@@ -282,6 +332,14 @@ const FarmLog = () => {
                 <p><strong>Người thực hiện:</strong> {log.operator_name}</p>
                 {item && (
                   <p><strong>Vật tư:</strong> {item.item_name} (Dùng: {log.quantity_used} {item.unit})</p>
+                )}
+                {log.location && (
+                  <p style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)' }}>
+                    <MapPin size={16} /> 
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${log.location.lat},${log.location.lng}`} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>
+                      Xem vị trí trên bản đồ
+                    </a>
+                  </p>
                 )}
                 {log.notes && (
                   <p style={{ marginTop: '4px', fontStyle: 'italic', color: 'var(--text-secondary)' }}>"{log.notes}"</p>
