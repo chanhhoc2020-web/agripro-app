@@ -125,6 +125,10 @@ const TraceabilityPage = () => {
               <p style={{ fontWeight: 600 }}>{zone?.puc_code}</p>
             </div>
             <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Người trồng</p>
+              <p style={{ fontWeight: 600 }}>{[...new Set(logs.map(log => log.operator_name).filter(Boolean))].join(', ') || 'Đang cập nhật'}</p>
+            </div>
+            <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Ngày thu hoạch</p>
               <p style={{ fontWeight: 600 }}>10/08/2026</p>
             </div>
