@@ -13,11 +13,13 @@ const TraceabilityPage = () => {
   const urlPuc = searchParams.get('puc');
   const urlYield = searchParams.get('yield');
   const urlDate = searchParams.get('date');
+  const urlFarmer = searchParams.get('farmer');
 
   const currentBatch = batches?.find(b => b.hash === hash) || {
     pucCode: urlPuc,
     yieldAmt: urlYield,
-    harvestDate: urlDate
+    harvestDate: urlDate,
+    farmerName: urlFarmer
   };
   
   const activePucCode = currentBatch?.pucCode || plantingZones[0]?.puc_code;
@@ -28,15 +30,24 @@ const TraceabilityPage = () => {
   const [formData, setFormData] = React.useState({
     pucCode: zone?.puc_code || '',
     harvestDate: new Date().toISOString().split('T')[0],
-    yieldAmt: 1000
+    yieldAmt: 1000,
+    farmerName: ''
   });
+
+  const availableFarmers = [...new Set(farmLogs.filter(l => l.puc_code === formData.pucCode).map(l => l.operator_name).filter(Boolean))];
+
+  React.useEffect(() => {
+    if (availableFarmers.length > 0 && !availableFarmers.includes(formData.farmerName)) {
+      setFormData(prev => ({ ...prev, farmerName: availableFarmers[0] }));
+    }
+  }, [formData.pucCode, farmLogs]);
 
   // Check if we are viewing the public page (not logged in) or generating it
   const isGenerating = !hash;
   
   // Embed data directly into the QR URL so the phone can read it without a backend database
   const qrUrl = isGenerating 
-    ? `${window.location.origin}/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}`
+    ? `${window.location.origin}/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}&farmer=${encodeURIComponent(formData.farmerName)}`
     : window.location.href;
 
   const downloadQRCode = () => {
@@ -67,6 +78,13 @@ const TraceabilityPage = () => {
               </select>
             </div>
             <div className="input-group">
+              <label className="input-label">Tên người trồng</label>
+              <select className="input-field" value={formData.farmerName} onChange={e => setFormData({...formData, farmerName: e.target.value})}>
+                <option value="">-- Chọn người trồng --</option>
+                {availableFarmers.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
+            <div className="input-group">
               <label className="input-label">Ngày thu hoạch</label>
               <input type="date" className="input-field" value={formData.harvestDate} onChange={e => setFormData({...formData, harvestDate: e.target.value})} />
             </div>
@@ -85,7 +103,8 @@ const TraceabilityPage = () => {
                   hash: newHash,
                   pucCode: formData.pucCode,
                   harvestDate: formData.harvestDate,
-                  yieldAmt: formData.yieldAmt
+                  yieldAmt: formData.yieldAmt,
+                  farmerName: formData.farmerName
                 });
                 alert('Khởi tạo Lô hàng và Mã QR thành công!');
               }}
@@ -103,7 +122,7 @@ const TraceabilityPage = () => {
               Quét mã này để xem thông tin truy xuất nguồn gốc.
             </p>
             <div className="flex gap-2" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Link to={`/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
+              <Link to={`/trace/${generatedHash}?puc=${formData.pucCode}&yield=${formData.yieldAmt}&date=${formData.harvestDate}&farmer=${encodeURIComponent(formData.farmerName)}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
               <button className="btn btn-outline" onClick={downloadQRCode}>Tải ảnh QR</button>
               <button className="btn btn-primary" onClick={() => window.print()}>In Tem Nhãn</button>
             </div>
@@ -154,7 +173,7 @@ const TraceabilityPage = () => {
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Người trồng</p>
-              <p style={{ fontWeight: 600 }}>{[...new Set(logs.map(log => log.operator_name).filter(Boolean))].join(', ') || 'Đang cập nhật'}</p>
+              <p style={{ fontWeight: 600 }}>{currentBatch?.farmerName || [...new Set(logs.map(log => log.operator_name).filter(Boolean))].join(', ') || 'Đang cập nhật'}</p>
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Ngày thu hoạch</p>
