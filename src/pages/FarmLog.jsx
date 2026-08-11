@@ -82,9 +82,11 @@ const FarmLog = () => {
   const handlePhotoCapture = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Create a local preview URL
-      const url = URL.createObjectURL(file);
-      setFormData(prev => ({ ...prev, photo_url: url }));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, photo_url: reader.result }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
