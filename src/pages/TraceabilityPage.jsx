@@ -14,7 +14,9 @@ const TraceabilityPage = () => {
   const zone = plantingZones[0];
   const logs = farmLogs.filter(l => l.puc_code === zone?.puc_code).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   
-  const qrUrl = `${window.location.origin}/trace/${hash || 'demo-hash-123'}`;
+  const [generatedHash, setGeneratedHash] = React.useState('demo-hash-123');
+  
+  const qrUrl = `${window.location.origin}/trace/${hash || generatedHash}`;
 
   // Check if we are viewing the public page (not logged in) or generating it
   const isGenerating = !hash;
@@ -41,7 +43,18 @@ const TraceabilityPage = () => {
               <label className="input-label">Sản lượng đóng gói (kg)</label>
               <input type="number" className="input-field" defaultValue={1000} />
             </div>
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: 'var(--spacing-2)' }}>Tạo lô & Mã QR</button>
+            <button 
+              type="button"
+              className="btn btn-primary" 
+              style={{ width: '100%', marginTop: 'var(--spacing-2)' }}
+              onClick={() => {
+                const newHash = 'BATCH-' + Date.now().toString(36).toUpperCase();
+                setGeneratedHash(newHash);
+                alert('Khởi tạo Lô hàng và Mã QR thành công!');
+              }}
+            >
+              Tạo lô & Mã QR
+            </button>
           </div>
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -53,8 +66,8 @@ const TraceabilityPage = () => {
               Quét mã này để xem thông tin truy xuất nguồn gốc.
             </p>
             <div className="flex gap-2">
-              <Link to={`/trace/demo-hash-123`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
-              <button className="btn btn-primary">In Tem Nhãn</button>
+              <Link to={`/trace/${generatedHash}`} target="_blank" className="btn btn-outline">Mở trang truy xuất</Link>
+              <button className="btn btn-primary" onClick={() => window.print()}>In Tem Nhãn</button>
             </div>
           </div>
         </div>
