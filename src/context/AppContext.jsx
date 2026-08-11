@@ -22,6 +22,11 @@ export const AppProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : initialFarmLogs;
   });
   
+  const [batches, setBatches] = useState(() => {
+    const saved = localStorage.getItem('agripro_batches');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('agripro_user');
     return saved ? JSON.parse(saved) : null;
@@ -39,6 +44,10 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('agripro_farmLogs', JSON.stringify(farmLogs));
   }, [farmLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('agripro_batches', JSON.stringify(batches));
+  }, [batches]);
 
   useEffect(() => {
     if (user) {
@@ -139,12 +148,17 @@ export const AppProvider = ({ children }) => {
     setFarmLogs([...farmLogs, { ...log, log_id: `log-${Date.now()}` }]);
   };
 
+  const addBatch = (batch) => {
+    setBatches([...batches, batch]);
+  };
+
   return (
     <AppContext.Provider value={{
       user, login, logout,
       plantingZones, addZone, updateZone, deleteZone,
       inventory, addInventoryItem, updateStock,
       farmLogs, addFarmLog,
+      batches, addBatch,
       bannedIngredients
     }}>
       {children}

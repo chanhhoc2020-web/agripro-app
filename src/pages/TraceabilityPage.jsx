@@ -6,15 +6,19 @@ import { MapPin, Sprout, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 const TraceabilityPage = () => {
   const { hash } = useParams();
-  const { plantingZones, farmLogs, inventory } = useAppContext();
+  const { plantingZones, farmLogs, inventory, batches, addBatch } = useAppContext();
 
-  // Mocking data retrieval based on hash
-  // In a real app, we would fetch a HarvestBatch by public_hash_token
-  // For demo, we just get the first PUC and its logs
-  const zone = plantingZones[0];
+  const currentBatch = batches?.find(b => b.hash === hash) || null;
+  const activePucCode = currentBatch?.pucCode || plantingZones[0]?.puc_code;
+  const zone = plantingZones.find(z => z.puc_code === activePucCode) || plantingZones[0];
   const logs = farmLogs.filter(l => l.puc_code === zone?.puc_code).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   
   const [generatedHash, setGeneratedHash] = React.useState('demo-hash-123');
+  const [formData, setFormData] = React.useState({
+    pucCode: zone?.puc_code || '',
+    harvestDate: new Date().toISOString().split('T')[0],
+    yieldAmt: 1000
+  });
   
   const qrUrl = `${window.location.origin}/trace/${hash || generatedHash}`;
 
@@ -44,17 +48,17 @@ const TraceabilityPage = () => {
             <h3 style={{ marginBottom: 'var(--spacing-4)' }}>Thông tin lô hàng</h3>
             <div className="input-group">
               <label className="input-label">Mã Vùng Trồng (PUC)</label>
-              <select className="input-field" defaultValue={zone?.puc_code}>
+              <select className="input-field" value={formData.pucCode} onChange={e => setFormData({...formData, pucCode: e.target.value})}>
                 {plantingZones.map(z => <option key={z.id} value={z.puc_code}>{z.puc_code} - {z.zone_name}</option>)}
               </select>
             </div>
             <div className="input-group">
               <label className="input-label">Ngày thu hoạch</label>
-              <input type="date" className="input-field" defaultValue={new Date().toISOString().split('T')[0]} />
+              <input type="date" className="input-field" value={formData.harvestDate} onChange={e => setFormData({...formData, harvestDate: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">Sản lượng đóng gói (kg)</label>
-              <input type="number" className="input-field" defaultValue={1000} />
+              <input type="number" className="input-field" value={formData.yieldAmt} onChange={e => setFormData({...formData, yieldAmt: Number(e.target.value)})} />
             </div>
             <button 
               type="button"
@@ -63,6 +67,12 @@ const TraceabilityPage = () => {
               onClick={() => {
                 const newHash = 'BATCH-' + Date.now().toString(36).toUpperCase();
                 setGeneratedHash(newHash);
+                addBatch({
+                  hash: newHash,
+                  pucCode: formData.pucCode,
+                  harvestDate: formData.harvestDate,
+                  yieldAmt: formData.yieldAmt
+                });
                 alert('Khởi tạo Lô hàng và Mã QR thành công!');
               }}
             >
@@ -125,12 +135,16 @@ const TraceabilityPage = () => {
               <p style={{ fontWeight: 600 }}>{zone?.puc_code}</p>
             </div>
             <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Sản lượng</p>
+              <p style={{ fontWeight: 600, color: 'var(--primary-dark)' }}>{currentBatch?.yieldAmt ? `${currentBatch.yieldAmt} kg` : 'Chưa cập nhật'}</p>
+            </div>
+            <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Người trồng</p>
               <p style={{ fontWeight: 600 }}>{[...new Set(logs.map(log => log.operator_name).filter(Boolean))].join(', ') || 'Đang cập nhật'}</p>
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Ngày thu hoạch</p>
-              <p style={{ fontWeight: 600 }}>10/08/2026</p>
+              <p style={{ fontWeight: 600 }}>{currentBatch?.harvestDate ? new Date(currentBatch.harvestDate).toLocaleDateString('vi-VN') : '10/08/2026'}</p>
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Tiêu chuẩn</p>
