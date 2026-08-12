@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, Camera, Mic, Tractor, Droplet, Bug, Scissors, Wheat, X, MapPin } from 'lucide-react';
-import Tesseract from 'tesseract.js';
-import stringSimilarity from 'string-similarity';
 
 const ACTION_TYPES = [
   { id: 'lam_dat', name: 'Làm đất', icon: Tractor, color: '#3B82F6' },
@@ -16,10 +14,6 @@ const ACTION_TYPES = [
 // Helper icon component since Sprout wasn't imported properly above for the array
 import { Sprout } from 'lucide-react';
 
-const normalizeText = (text) => {
-  if (!text) return '';
-  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-};
 
 const FarmLog = () => {
   const { farmLogs, addFarmLog, plantingZones, inventory, user } = useAppContext();
@@ -176,65 +170,39 @@ const FarmLog = () => {
             aiCtx.drawImage(img, 0, 0, aiWidth, aiHeight);
             const aiDataUrl = aiCanvas.toDataURL('image/jpeg', 0.9);
 
-            Tesseract.recognize(
-              aiDataUrl,
-              'vie+eng'
-            ).then(({ data: { text } }) => {
+            const filterCategory = selectedAction?.name === 'Bón phân' ? 'Phân bón' : 'Thuốc BVTV';
+            const currentAvailableItems = inventory.filter(i => i.category === filterCategory);
+
+            fetch('/api/gemini-ocr', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageBase64: aiDataUrl,
+                inventoryList: currentAvailableItems.map(item => ({ id: item.id, item_name: item.item_name }))
+              })
+            })
+            .then(res => res.json())
+            .then(data => {
               setIsScanning(false);
-              const normalizedOCR = normalizeText(text);
-              const filterCategory = selectedAction?.name === 'Bón phân' ? 'Phân bón' : 'Thuốc BVTV';
-              const currentAvailableItems = inventory.filter(i => i.category === filterCategory);
-              
-              if (currentAvailableItems.length > 0 && normalizedOCR.trim().length > 0) {
-                let globalBestMatch = null;
-                let globalMaxScore = 0;
-                
-                currentAvailableItems.forEach(item => {
-                  const normalizedItemName = normalizeText(item.item_name);
-                  if (normalizedOCR.includes(normalizedItemName)) {
-                     if (1 > globalMaxScore) {
-                        globalMaxScore = 1;
-                        globalBestMatch = item;
-                     }
-                  } else {
-                     const itemWords = normalizedItemName.split(/\s+/).filter(w => w.length >= 2);
-                     const ocrWords = normalizedOCR.split(/\s+/).filter(w => w.length >= 2);
-                     
-                     if (itemWords.length > 0 && ocrWords.length > 0) {
-                       let itemScore = 0;
-                       itemWords.forEach(iWord => {
-                          let bestWordScore = 0;
-                          ocrWords.forEach(oWord => {
-                             const sim = stringSimilarity.compareTwoStrings(iWord, oWord);
-                             if (sim > bestWordScore) bestWordScore = sim;
-                          });
-                          itemScore += bestWordScore;
-                       });
-                       
-                       const avgScore = itemScore / itemWords.length;
-                       
-                       if (avgScore > globalMaxScore) {
-                          globalMaxScore = avgScore;
-                          globalBestMatch = item;
-                       }
-                     }
-                  }
-                });
-                
-                if (globalBestMatch && globalMaxScore >= 0.55) {
-                  setFormData(prev => ({ ...prev, inventory_item_id: globalBestMatch.id }));
-                  alert(`AI đã nhận diện thành công: ${globalBestMatch.item_name} (Độ khớp: ${Math.round(globalMaxScore * 100)}%)`);
+              if (data.error) {
+                alert(`Lỗi AI Đám mây: ${data.error}`);
+                return;
+              }
+              if (data.matchedId) {
+                const matchedItem = currentAvailableItems.find(i => i.id === data.matchedId);
+                if (matchedItem) {
+                  setFormData(prev => ({ ...prev, inventory_item_id: matchedItem.id }));
+                  alert(`Gemini AI đã nhận diện chính xác: ${matchedItem.item_name}`);
                 } else {
-                  const shortOCR = text.replace(/\n/g, ' ').substring(0, 50);
-                  alert(`AI không tìm thấy loại vật tư phù hợp.\n(AI đọc được: "${shortOCR}...")\nVui lòng chọn thủ công.`);
+                  alert('Gemini trả về mã không hợp lệ. Vui lòng chọn thủ công.');
                 }
               } else {
-                const shortOCR = text.replace(/\n/g, ' ').substring(0, 50);
-                alert(`Không thể nhận diện hoặc kho chưa có vật tư nào.\n(AI đọc được: "${shortOCR}...")`);
+                alert('Gemini không tìm thấy vật tư nào khớp với ảnh. Vui lòng chọn thủ công.');
               }
-            }).catch(err => {
+            })
+            .catch(err => {
               setIsScanning(false);
-              alert('Lỗi khi chạy AI nhận diện.');
+              alert(`Lỗi kết nối Máy chủ AI: ${err.message}`);
             });
           }
         };
