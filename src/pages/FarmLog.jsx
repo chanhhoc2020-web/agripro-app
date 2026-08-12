@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, Camera, Mic, Tractor, Droplet, Bug, Scissors, Wheat, X, MapPin } from 'lucide-react';
+import Tesseract from 'tesseract.js';
 
 const ACTION_TYPES = [
   { id: 'lam_dat', name: 'Làm đất', icon: Tractor, color: '#3B82F6' },
@@ -23,45 +24,47 @@ const FarmLog = () => {
   const [formData, setFormData] = useState({
     cropName: '',
     puc_code: '',
-    inventory_item_id: '',
+    detected_item_name: '',
     quantity_used: '',
     notes: '',
     photo_url: '',
     location: null,
   });
-
-  const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      setFormData(prev => ({ ...prev, location: 'loading' }));
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData(prev => ({ 
-            ...prev, 
-            location: { 
-              lat: position.coords.latitude, 
-              lng: position.coords.longitude 
-            } 
-          }));
-        },
-        (error) => {
-          setFormData(prev => ({ ...prev, location: null }));
-          alert("Không thể lấy vị trí. Vui lòng cấp quyền định vị GPS cho trình duyệt.");
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
-    }
-  };
+  const [isScanning, setIsScanning] = useState(false);
 
   const activeZones = plantingZones.filter(z => z.status === 'Active');
 
-  React.useEffect(() => {
-    const selectedZone = activeZones.find(z => z.puc_code === formData.puc_code);
-    if (selectedZone && selectedZone.crop_type) {
-      setFormData(prev => ({ ...prev, cropName: selectedZone.crop_type }));
+  // Auto-fetch GPS and set default PUC when action is selected
+  useEffect(() => {
+    if (showAddLog && selectedAction) {
+      if (activeZones.length > 0) {
+        setFormData(prev => ({ 
+          ...prev, 
+          puc_code: activeZones[0].puc_code, 
+          cropName: activeZones[0].crop_type 
+        }));
+      }
+
+      if (navigator.geolocation && !formData.location) {
+        setFormData(prev => ({ ...prev, location: 'loading' }));
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setFormData(prev => ({ 
+              ...prev, 
+              location: { 
+                lat: position.coords.latitude, 
+                lng: position.coords.longitude 
+              } 
+            }));
+          },
+          (error) => {
+            setFormData(prev => ({ ...prev, location: null }));
+          },
+          { enableHighAccuracy: true }
+        );
+      }
     }
-  }, [formData.puc_code, activeZones]);
+  }, [showAddLog, selectedAction, activeZones]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,7 +74,7 @@ const FarmLog = () => {
         puc_code: formData.puc_code,
         action_type: selectedAction.name,
         timestamp: new Date().toISOString(),
-        inventory_item_id: formData.inventory_item_id || null,
+        inventory_item_id: formData.detected_item_name || null,
         quantity_used: Number(formData.quantity_used) || 0,
         operator_name: user?.name,
         photo_url: formData.photo_url,
@@ -81,7 +84,7 @@ const FarmLog = () => {
       setShowAddLog(false);
       setSelectedAction(null);
       setErrorMsg('');
-      setFormData({ cropName: '', puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '', location: null });
+      setFormData({ cropName: '', puc_code: '', detected_item_name: '', quantity_used: '', notes: '', photo_url: '', location: null });
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -149,6 +152,22 @@ const FarmLog = () => {
           // Compress to JPEG with 70% quality
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
           setFormData(prev => ({ ...prev, photo_url: compressedDataUrl }));
+
+          if (['Bón phân', 'Phun thuốc'].includes(selectedAction?.name)) {
+            setIsScanning(true);
+            setFormData(prev => ({ ...prev, detected_item_name: 'AI đang phân tích ảnh...' }));
+            Tesseract.recognize(
+              compressedDataUrl,
+              'vie+eng'
+            ).then(({ data: { text } }) => {
+              setIsScanning(false);
+              const detected = text.split('\n').filter(t => t.trim().length > 2).slice(0, 2).join(' - ');
+              setFormData(prev => ({ ...prev, detected_item_name: detected || '[Không nhận diện được tên]' }));
+            }).catch(err => {
+              setIsScanning(false);
+              setFormData(prev => ({ ...prev, detected_item_name: '[Lỗi phân tích AI]' }));
+            });
+          }
         };
       };
       reader.readAsDataURL(file);
@@ -214,31 +233,14 @@ const FarmLog = () => {
               </div>
             )}
             
-            <div className="input-group">
-              <label className="input-label" style={{ fontSize: '1rem' }}>Tên trái cây / Sản phẩm</label>
-              <input type="text" className="input-field" style={{ padding: '12px', fontSize: '1rem' }} value={formData.cropName} onChange={e => setFormData({...formData, cropName: e.target.value})} placeholder="VD: Sầu riêng Ri6" />
-            </div>
-
-            <div className="input-group">
-              <label className="input-label" style={{ fontSize: '1rem' }}>Chọn vùng trồng (PUC)</label>
-              <select className="input-field" style={{ padding: '12px', fontSize: '1rem' }} required value={formData.puc_code} onChange={e => setFormData({...formData, puc_code: e.target.value})}>
-                <option value="">-- Chọn lô đất --</option>
-                {activeZones.map(zone => (
-                  <option key={zone.id} value={zone.puc_code}>{zone.puc_code} - {zone.zone_name}</option>
-                ))}
-              </select>
-            </div>
-
             {needsInventory && (
               <>
                 <div className="input-group">
-                  <label className="input-label" style={{ fontSize: '1rem' }}>Sử dụng vật tư</label>
-                  <select className="input-field" style={{ padding: '12px', fontSize: '1rem' }} required value={formData.inventory_item_id} onChange={e => setFormData({...formData, inventory_item_id: e.target.value})}>
-                    <option value="">-- Chọn loại vật tư --</option>
-                    {availableItems.map(item => (
-                      <option key={item.id} value={item.id}>{item.item_name} (Tồn: {item.current_stock} {item.unit})</option>
-                    ))}
-                  </select>
+                  <label className="input-label" style={{ fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
+                    Tên vật tư (AI tự động nhận diện)
+                    {isScanning && <span style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>Đang quét AI...</span>}
+                  </label>
+                  <input type="text" className="input-field" style={{ padding: '12px', fontSize: '1rem', backgroundColor: 'var(--surface-hover)' }} value={formData.detected_item_name} onChange={e => setFormData({...formData, detected_item_name: e.target.value})} placeholder="Vui lòng chụp ảnh bao bì để AI nhận diện..." />
                 </div>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem' }}>Số lượng/Liều lượng</label>
@@ -257,28 +259,10 @@ const FarmLog = () => {
               </div>
             </div>
 
-            <div className="input-group">
+            <div className="input-group" style={{ display: 'none' }}>
               <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
                 Định vị bản đồ (GPS)
-                {formData.location && formData.location !== 'loading' && (
-                  <span style={{ fontSize: '0.875rem', color: 'var(--success)', marginTop: '4px' }}>
-                    ✓ Đã ghi nhận tọa độ ({formData.location.lat.toFixed(5)}, {formData.location.lng.toFixed(5)})
-                  </span>
-                )}
-                {formData.location === 'loading' && (
-                  <span style={{ fontSize: '0.875rem', color: 'var(--primary)', marginTop: '4px' }}>
-                    Đang tìm vệ tinh...
-                  </span>
-                )}
               </label>
-              
-              <button 
-                type="button"
-                className="btn btn-outline" 
-                onClick={handleGetLocation}
-                style={{ width: '100%', padding: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                <MapPin size={20} /> Lấy vị trí hiện tại
-              </button>
             </div>
 
             <div className="input-group">
@@ -345,9 +329,11 @@ const FarmLog = () => {
                 <p><strong>Vùng trồng:</strong> {zone ? `${zone.puc_code} - ${zone.zone_name}` : log.puc_code}</p>
                 <p><strong>Sản phẩm:</strong> {log.cropName || zone?.crop_type || 'N/A'}</p>
                 <p><strong>Người thực hiện:</strong> {log.operator_name}</p>
-                {item && (
+                {item ? (
                   <p><strong>Vật tư:</strong> {item.item_name} (Dùng: {log.quantity_used} {item.unit})</p>
-                )}
+                ) : log.inventory_item_id ? (
+                  <p><strong>Vật tư:</strong> {log.inventory_item_id} (Dùng: {log.quantity_used})</p>
+                ) : null}
                 {log.location && (
                   <p style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)' }}>
                     <MapPin size={16} /> 
