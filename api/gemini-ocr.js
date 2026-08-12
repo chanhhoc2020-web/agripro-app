@@ -1,3 +1,5 @@
+import { GoogleGenAI } from '@google/genai';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -15,8 +17,8 @@ export default async function handler(req, res) {
   }
 
   // Lấy data base64 thuần
-  const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
-  const mimeType = imageBase64.match(/^data:(image\/(png|jpeg|jpg));base64,/)?.[1] || "image/jpeg";
+  const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
+  const mimeType = imageBase64.match(/^data:(image\/(png|jpeg|jpg|webp));base64,/)?.[1] || "image/jpeg";
 
   const prompt = `
 Bạn là một chuyên gia nhận diện hình ảnh nhãn hiệu bao bì thuốc bảo vệ thực vật và phân bón.
@@ -33,31 +35,27 @@ Nhiệm vụ của bạn:
 `;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType, data: base64Data } }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 20,
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3.0-flash", 
+      contents: [
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data,
+          },
+        },
+        {
+          text: prompt,
         }
-      })
+      ],
+      config: {
+        temperature: 0.1
+      }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API Error: ${response.status} ${errorText}`);
-    }
-
-    const data = await response.json();
-    let textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NULL';
-    
+    let textResult = response.text.trim();
     // Xóa các ký tự thừa nếu AI lỡ sinh ra
     textResult = textResult.replace(/['"`]/g, '').trim();
 
