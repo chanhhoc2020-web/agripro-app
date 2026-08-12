@@ -160,8 +160,6 @@ const FarmLog = () => {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           
-          // Tiền xử lý ảnh: Trắng đen và tăng độ tương phản để AI dễ đọc chữ hơn
-          ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
           ctx.drawImage(img, 0, 0, width, height);
           
           // Compress to JPEG with 70% quality
@@ -219,10 +217,12 @@ const FarmLog = () => {
                   setFormData(prev => ({ ...prev, inventory_item_id: globalBestMatch.id }));
                   alert(`AI đã nhận diện thành công: ${globalBestMatch.item_name} (Độ khớp: ${Math.round(globalMaxScore * 100)}%)`);
                 } else {
-                  alert('AI không tìm thấy loại vật tư phù hợp từ ảnh. Vui lòng chọn thủ công.');
+                  const shortOCR = text.replace(/\n/g, ' ').substring(0, 50);
+                  alert(`AI không tìm thấy loại vật tư phù hợp.\n(AI đọc được: "${shortOCR}...")\nVui lòng chọn thủ công.`);
                 }
               } else {
-                alert('Không thể nhận diện hoặc kho chưa có vật tư nào.');
+                const shortOCR = text.replace(/\n/g, ' ').substring(0, 50);
+                alert(`Không thể nhận diện hoặc kho chưa có vật tư nào.\n(AI đọc được: "${shortOCR}...")`);
               }
             }).catch(err => {
               setIsScanning(false);
