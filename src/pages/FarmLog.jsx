@@ -138,6 +138,7 @@ const FarmLog = () => {
         const img = new Image();
         img.src = reader.result;
         img.onload = () => {
+          // -- Luồng 1: Ảnh nén để lưu DB (Max 800px) --
           const canvas = document.createElement('canvas');
           const MAX_WIDTH = 800;
           const MAX_HEIGHT = 800;
@@ -145,31 +146,38 @@ const FarmLog = () => {
           let height = img.height;
 
           if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
+            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
           } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
+            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
           }
-
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
-          
           ctx.drawImage(img, 0, 0, width, height);
-          
-          // Compress to JPEG with 70% quality
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
           setFormData(prev => ({ ...prev, photo_url: compressedDataUrl }));
 
           if (['Bón phân', 'Phun thuốc'].includes(selectedAction?.name)) {
             setIsScanning(true);
+            
+            // -- Luồng 2: Ảnh nét dành riêng cho AI (Max 2000px) --
+            const aiCanvas = document.createElement('canvas');
+            let aiWidth = img.width;
+            let aiHeight = img.height;
+            const AI_MAX = 2000;
+            if (aiWidth > aiHeight) {
+              if (aiWidth > AI_MAX) { aiHeight *= AI_MAX / aiWidth; aiWidth = AI_MAX; }
+            } else {
+              if (aiHeight > AI_MAX) { aiWidth *= AI_MAX / aiHeight; aiHeight = AI_MAX; }
+            }
+            aiCanvas.width = aiWidth;
+            aiCanvas.height = aiHeight;
+            const aiCtx = aiCanvas.getContext('2d');
+            aiCtx.drawImage(img, 0, 0, aiWidth, aiHeight);
+            const aiDataUrl = aiCanvas.toDataURL('image/jpeg', 0.9);
+
             Tesseract.recognize(
-              compressedDataUrl,
+              aiDataUrl,
               'vie+eng'
             ).then(({ data: { text } }) => {
               setIsScanning(false);
