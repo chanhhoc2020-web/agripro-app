@@ -38,7 +38,7 @@ Nhiệm vụ của bạn:
     const ai = new GoogleGenAI({ apiKey: API_KEY });
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash", 
+      model: "gemini-2.0-flash", 
       contents: [
         {
           inlineData: {
