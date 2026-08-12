@@ -243,6 +243,8 @@ const FarmLog = () => {
     const needsInventory = ['Bón phân', 'Phun thuốc'].includes(selectedAction.name);
     const filterCategory = selectedAction.name === 'Bón phân' ? 'Phun bón' : (selectedAction.name === 'Phun thuốc' ? 'Thuốc BVTV' : null);
     const availableItems = filterCategory ? inventory.filter(i => i.category === filterCategory || (selectedAction.name === 'Bón phân' && i.category === 'Phân bón')) : [];
+    const selectedItemDetail = availableItems.find(i => i.id === formData.inventory_item_id);
+    const unitLabel = selectedItemDetail ? `(${selectedItemDetail.unit})` : '';
 
     return (
       <div className="animate-fade-in" style={{ padding: 'var(--spacing-4)', maxWidth: '600px', margin: '0 auto' }}>
@@ -266,6 +268,26 @@ const FarmLog = () => {
               </div>
             )}
             
+            <div className="input-group">
+              <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
+                {needsInventory ? 'Chụp ảnh vật tư' : 'Ảnh minh chứng'}
+                {formData.photo_url && (
+                  <img src={formData.photo_url} alt="Minh chứng" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', marginTop: '8px' }} />
+                )}
+              </label>
+              
+              <label className="btn btn-outline" style={{ width: '100%', padding: '16px', display: 'flex', gap: '8px', borderStyle: 'dashed', cursor: 'pointer', justifyContent: 'center' }}>
+                <Camera size={24} /> {formData.photo_url ? 'Chụp lại ảnh' : (needsInventory ? 'Chụp ảnh vật tư' : 'Chụp ảnh minh chứng')}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment" 
+                  style={{ display: 'none' }} 
+                  onChange={handlePhotoCapture}
+                />
+              </label>
+            </div>
+
             {needsInventory && (
               <>
                 <div className="input-group">
@@ -281,7 +303,7 @@ const FarmLog = () => {
                   </select>
                 </div>
                 <div className="input-group">
-                  <label className="input-label" style={{ fontSize: '1rem' }}>Số lượng/Liều lượng</label>
+                  <label className="input-label" style={{ fontSize: '1rem' }}>Số lượng/Liều lượng {unitLabel}</label>
                   <input type="number" className="input-field" style={{ padding: '12px', fontSize: '1rem' }} required step="0.1" value={formData.quantity_used} onChange={e => setFormData({...formData, quantity_used: e.target.value})} />
                 </div>
               </>
@@ -300,26 +322,6 @@ const FarmLog = () => {
             <div className="input-group" style={{ display: 'none' }}>
               <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
                 Định vị bản đồ (GPS)
-              </label>
-            </div>
-
-            <div className="input-group">
-              <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
-                Ảnh minh chứng
-                {formData.photo_url && (
-                  <img src={formData.photo_url} alt="Minh chứng" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', marginTop: '8px' }} />
-                )}
-              </label>
-              
-              <label className="btn btn-outline" style={{ width: '100%', padding: '16px', display: 'flex', gap: '8px', borderStyle: 'dashed', cursor: 'pointer', justifyContent: 'center' }}>
-                <Camera size={24} /> {formData.photo_url ? 'Chụp lại ảnh' : 'Chụp ảnh minh chứng'}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  capture="environment" 
-                  style={{ display: 'none' }} 
-                  onChange={handlePhotoCapture}
-                />
               </label>
             </div>
 
