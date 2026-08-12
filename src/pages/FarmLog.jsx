@@ -73,6 +73,12 @@ const FarmLog = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!formData.photo_url) {
+      setErrorMsg('Vui lòng chụp ảnh vật tư / minh chứng trước khi lưu nhật ký.');
+      return;
+    }
+
     try {
       await addFarmLog({
         cropName: formData.cropName,
