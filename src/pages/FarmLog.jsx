@@ -15,6 +15,11 @@ const ACTION_TYPES = [
 // Helper icon component since Sprout wasn't imported properly above for the array
 import { Sprout } from 'lucide-react';
 
+const normalizeText = (text) => {
+  if (!text) return '';
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
+
 const FarmLog = () => {
   const { farmLogs, addFarmLog, plantingZones, inventory, user } = useAppContext();
   const [showAddLog, setShowAddLog] = useState(false);
@@ -24,7 +29,7 @@ const FarmLog = () => {
   const [formData, setFormData] = useState({
     cropName: '',
     puc_code: '',
-    detected_item_name: '',
+    inventory_item_id: '',
     quantity_used: '',
     notes: '',
     photo_url: '',
@@ -74,7 +79,7 @@ const FarmLog = () => {
         puc_code: formData.puc_code,
         action_type: selectedAction.name,
         timestamp: new Date().toISOString(),
-        inventory_item_id: formData.detected_item_name || null,
+        inventory_item_id: formData.inventory_item_id || null,
         quantity_used: Number(formData.quantity_used) || 0,
         operator_name: user?.name,
         photo_url: formData.photo_url,
@@ -84,7 +89,7 @@ const FarmLog = () => {
       setShowAddLog(false);
       setSelectedAction(null);
       setErrorMsg('');
-      setFormData({ cropName: '', puc_code: '', detected_item_name: '', quantity_used: '', notes: '', photo_url: '', location: null });
+      setFormData({ cropName: '', puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '', location: null });
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -155,17 +160,45 @@ const FarmLog = () => {
 
           if (['Bón phân', 'Phun thuốc'].includes(selectedAction?.name)) {
             setIsScanning(true);
-            setFormData(prev => ({ ...prev, detected_item_name: 'AI đang phân tích ảnh...' }));
             Tesseract.recognize(
               compressedDataUrl,
               'vie+eng'
             ).then(({ data: { text } }) => {
               setIsScanning(false);
-              const detected = text.split('\n').filter(t => t.trim().length > 2).slice(0, 2).join(' - ');
-              setFormData(prev => ({ ...prev, detected_item_name: detected || '[Không nhận diện được tên]' }));
+              const normalizedOCR = normalizeText(text);
+              const filterCategory = selectedAction?.name === 'Bón phân' ? 'Phân bón' : 'Thuốc BVTV';
+              const currentAvailableItems = inventory.filter(i => i.category === filterCategory);
+              
+              let bestMatch = null;
+              let maxScore = 0;
+              
+              currentAvailableItems.forEach(item => {
+                const normalizedItemName = normalizeText(item.item_name);
+                const itemWords = normalizedItemName.split(/\s+/);
+                let score = 0;
+                itemWords.forEach(word => {
+                  if (word.length >= 2 && normalizedOCR.includes(word)) {
+                    score += word.length;
+                  }
+                });
+                if (normalizedOCR.includes(normalizedItemName)) {
+                  score += 100;
+                }
+                if (score > maxScore) {
+                  maxScore = score;
+                  bestMatch = item;
+                }
+              });
+              
+              if (bestMatch && maxScore > 0) {
+                setFormData(prev => ({ ...prev, inventory_item_id: bestMatch.id }));
+                alert(`AI đã nhận diện thành công: ${bestMatch.item_name}`);
+              } else {
+                alert('AI không tìm thấy loại vật tư phù hợp từ ảnh. Vui lòng chọn thủ công.');
+              }
             }).catch(err => {
               setIsScanning(false);
-              setFormData(prev => ({ ...prev, detected_item_name: '[Lỗi phân tích AI]' }));
+              alert('Lỗi khi chạy AI nhận diện.');
             });
           }
         };
@@ -237,10 +270,15 @@ const FarmLog = () => {
               <>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                    Tên vật tư (AI tự động nhận diện)
+                    Tên vật tư (AI tự động chọn)
                     {isScanning && <span style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>Đang quét AI...</span>}
                   </label>
-                  <input type="text" className="input-field" style={{ padding: '12px', fontSize: '1rem', backgroundColor: 'var(--surface-hover)' }} value={formData.detected_item_name} onChange={e => setFormData({...formData, detected_item_name: e.target.value})} placeholder="Vui lòng chụp ảnh bao bì để AI nhận diện..." />
+                  <select className="input-field" style={{ padding: '12px', fontSize: '1rem' }} required value={formData.inventory_item_id} onChange={e => setFormData({...formData, inventory_item_id: e.target.value})}>
+                    <option value="">-- Chọn loại vật tư --</option>
+                    {availableItems.map(item => (
+                      <option key={item.id} value={item.id}>{item.item_name} (Tồn: {item.current_stock} {item.unit})</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem' }}>Số lượng/Liều lượng</label>
@@ -329,11 +367,9 @@ const FarmLog = () => {
                 <p><strong>Vùng trồng:</strong> {zone ? `${zone.puc_code} - ${zone.zone_name}` : log.puc_code}</p>
                 <p><strong>Sản phẩm:</strong> {log.cropName || zone?.crop_type || 'N/A'}</p>
                 <p><strong>Người thực hiện:</strong> {log.operator_name}</p>
-                {item ? (
+                {item && (
                   <p><strong>Vật tư:</strong> {item.item_name} (Dùng: {log.quantity_used} {item.unit})</p>
-                ) : log.inventory_item_id ? (
-                  <p><strong>Vật tư:</strong> {log.inventory_item_id} (Dùng: {log.quantity_used})</p>
-                ) : null}
+                )}
                 {log.location && (
                   <p style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)' }}>
                     <MapPin size={16} /> 
