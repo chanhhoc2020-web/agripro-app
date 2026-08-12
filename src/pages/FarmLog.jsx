@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, Camera, Mic, Tractor, Droplet, Bug, Scissors, Wheat, X, MapPin } from 'lucide-react';
 import Tesseract from 'tesseract.js';
+import stringSimilarity from 'string-similarity';
 
 const ACTION_TYPES = [
   { id: 'lam_dat', name: 'Làm đất', icon: Tractor, color: '#3B82F6' },
@@ -158,6 +159,9 @@ const FarmLog = () => {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+          
+          // Tiền xử lý ảnh: Trắng đen và tăng độ tương phản để AI dễ đọc chữ hơn
+          ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
           ctx.drawImage(img, 0, 0, width, height);
           
           // Compress to JPEG with 70% quality
@@ -175,32 +179,50 @@ const FarmLog = () => {
               const filterCategory = selectedAction?.name === 'Bón phân' ? 'Phân bón' : 'Thuốc BVTV';
               const currentAvailableItems = inventory.filter(i => i.category === filterCategory);
               
-              let bestMatch = null;
-              let maxScore = 0;
-              
-              currentAvailableItems.forEach(item => {
-                const normalizedItemName = normalizeText(item.item_name);
-                const itemWords = normalizedItemName.split(/\s+/);
-                let score = 0;
-                itemWords.forEach(word => {
-                  if (word.length >= 2 && normalizedOCR.includes(word)) {
-                    score += word.length;
+              if (currentAvailableItems.length > 0 && normalizedOCR.trim().length > 0) {
+                let globalBestMatch = null;
+                let globalMaxScore = 0;
+                
+                currentAvailableItems.forEach(item => {
+                  const normalizedItemName = normalizeText(item.item_name);
+                  if (normalizedOCR.includes(normalizedItemName)) {
+                     if (1 > globalMaxScore) {
+                        globalMaxScore = 1;
+                        globalBestMatch = item;
+                     }
+                  } else {
+                     const itemWords = normalizedItemName.split(/\s+/).filter(w => w.length >= 2);
+                     const ocrWords = normalizedOCR.split(/\s+/).filter(w => w.length >= 2);
+                     
+                     if (itemWords.length > 0 && ocrWords.length > 0) {
+                       let itemScore = 0;
+                       itemWords.forEach(iWord => {
+                          let bestWordScore = 0;
+                          ocrWords.forEach(oWord => {
+                             const sim = stringSimilarity.compareTwoStrings(iWord, oWord);
+                             if (sim > bestWordScore) bestWordScore = sim;
+                          });
+                          itemScore += bestWordScore;
+                       });
+                       
+                       const avgScore = itemScore / itemWords.length;
+                       
+                       if (avgScore > globalMaxScore) {
+                          globalMaxScore = avgScore;
+                          globalBestMatch = item;
+                       }
+                     }
                   }
                 });
-                if (normalizedOCR.includes(normalizedItemName)) {
-                  score += 100;
+                
+                if (globalBestMatch && globalMaxScore >= 0.55) {
+                  setFormData(prev => ({ ...prev, inventory_item_id: globalBestMatch.id }));
+                  alert(`AI đã nhận diện thành công: ${globalBestMatch.item_name} (Độ khớp: ${Math.round(globalMaxScore * 100)}%)`);
+                } else {
+                  alert('AI không tìm thấy loại vật tư phù hợp từ ảnh. Vui lòng chọn thủ công.');
                 }
-                if (score > maxScore) {
-                  maxScore = score;
-                  bestMatch = item;
-                }
-              });
-              
-              if (bestMatch && maxScore > 0) {
-                setFormData(prev => ({ ...prev, inventory_item_id: bestMatch.id }));
-                alert(`AI đã nhận diện thành công: ${bestMatch.item_name}`);
               } else {
-                alert('AI không tìm thấy loại vật tư phù hợp từ ảnh. Vui lòng chọn thủ công.');
+                alert('Không thể nhận diện hoặc kho chưa có vật tư nào.');
               }
             }).catch(err => {
               setIsScanning(false);
