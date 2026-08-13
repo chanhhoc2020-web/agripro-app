@@ -10,6 +10,7 @@ export const useAppContext = () => useContext(AppContext);
 export const AppProvider = ({ children }) => {
   const [plantingZones, setPlantingZones] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [farmerInventory, setFarmerInventory] = useState([]);
   const [farmLogs, setFarmLogs] = useState([]);
   const [batches, setBatches] = useState([]);
   const [users, setUsers] = useState([]);
@@ -47,6 +48,9 @@ export const AppProvider = ({ children }) => {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+    const unsubFarmerInventory = onSnapshot(collection(db, 'farmer_inventory'), (snapshot) => {
+      setFarmerInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
     return () => {
       unsubZones();
@@ -54,6 +58,7 @@ export const AppProvider = ({ children }) => {
       unsubLogs();
       unsubBatches();
       unsubUsers();
+      unsubFarmerInventory();
     };
   }, []);
 
@@ -127,19 +132,39 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const addFarmerInventoryItem = async (item) => {
+    // Check banned ingredients against the new item (which should be derived from global)
+    const isBanned = bannedIngredients.some(b => 
+      item.active_ingredient && item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
+    );
+    if (isBanned) {
+      throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
+    }
+    await addDoc(collection(db, 'farmer_inventory'), item);
+  };
+
+  const updateFarmerStock = async (id, quantityChange) => {
+    const item = farmerInventory.find(i => i.id === id);
+    if (item) {
+      await updateDoc(doc(db, 'farmer_inventory', id), {
+        current_stock: item.current_stock + quantityChange
+      });
+    }
+  };
+
   // Farm Log functions
   const addFarmLog = async (log) => {
-    // 1. If using inventory item
+    // 1. If using inventory item (now points to farmer_inventory)
     if (log.inventory_item_id) {
-      const item = inventory.find(i => i.id === log.inventory_item_id);
-      if (item) {
+      const fItem = farmerInventory.find(i => i.id === log.inventory_item_id);
+      if (fItem) {
         const isBanned = bannedIngredients.some(b => 
-          item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
+          fItem.active_ingredient && fItem.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
         );
         if (isBanned) {
           throw new Error(`CẢNH BÁO: Thuốc này chứa hoạt chất cấm. Không thể lưu nhật ký!`);
         }
-        await updateStock(item.id, -log.quantity_used);
+        await updateFarmerStock(fItem.id, -log.quantity_used);
       }
     }
 
@@ -147,20 +172,32 @@ export const AppProvider = ({ children }) => {
     if (log.action_type === 'Thu hoạch') {
       const pesticideLogs = farmLogs.filter(
         l => l.puc_code === log.puc_code && 
-        l.inventory_item_id && 
-        inventory.find(i => i.id === l.inventory_item_id && i.category === 'Thuốc BVTV')
+        (l.inventory_item_id || l.item_name_text) && 
+        l.action_type === 'Phun thuốc'
       );
 
       for (const pLog of pesticideLogs) {
-        const item = inventory.find(i => i.id === pLog.inventory_item_id);
+        let phiDays = 0;
+        let itemName = pLog.item_name_text || 'Thuốc không xác định';
+        
+        if (pLog.inventory_item_id) {
+          const fItem = farmerInventory.find(i => i.id === pLog.inventory_item_id);
+          if (fItem) {
+            phiDays = fItem.phi_days || 0;
+            itemName = fItem.item_name;
+          }
+        }
+        // If they just typed text, we don't know the exact PHI unless we look it up in global inventory,
+        // but for safety, we could assume 14 days, or just skip if we don't know. Let's just use what we have.
+
         const sprayDate = new Date(pLog.timestamp);
         const harvestDate = new Date(log.timestamp);
         const safeHarvestDate = new Date(sprayDate);
-        safeHarvestDate.setDate(safeHarvestDate.getDate() + (item.phi_days || 0));
+        safeHarvestDate.setDate(safeHarvestDate.getDate() + phiDays);
 
-        if (harvestDate < safeHarvestDate) {
+        if (phiDays > 0 && harvestDate < safeHarvestDate) {
           const daysLeft = Math.ceil((safeHarvestDate - harvestDate) / (1000 * 60 * 60 * 24));
-          throw new Error(`CẢNH BÁO: Vùng trồng này vừa phun thuốc ${item.item_name}. Chưa đủ thời gian cách ly PHI (Còn thiếu ${daysLeft} ngày). Sản phẩm thu hoạch có thể bị vi phạm tiêu chuẩn an toàn!`);
+          throw new Error(`CẢNH BÁO: Vùng trồng này vừa phun thuốc ${itemName}. Chưa đủ thời gian cách ly PHI (Còn thiếu ${daysLeft} ngày).`);
         }
       }
     }
@@ -177,6 +214,7 @@ export const AppProvider = ({ children }) => {
       user, login, logout,
       plantingZones, addZone, updateZone, deleteZone,
       inventory, addInventoryItem, updateStock,
+      farmerInventory, addFarmerInventoryItem, updateFarmerStock,
       farmLogs, addFarmLog,
       batches, addBatch,
       users, addUser, updateUser, deleteUser,

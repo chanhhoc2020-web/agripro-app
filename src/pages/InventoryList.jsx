@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
-const InventoryList = () => {
-  const { inventory, addInventoryItem, updateStock, user } = useAppContext();
+const InventoryList = () => दल
+  const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user } = useAppContext();
+  const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -16,16 +17,55 @@ const InventoryList = () => {
     dosage: '', purpose: '', usage_method: ''
   });
   const [errorMsg, setErrorMsg] = useState('');
+  
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const handleNameChange = (e) => {
+    const val = e.target.value;
+    setFormData({ ...formData, item_name: val });
+    
+    if (user?.role === 'farmer' && val.length > 1) {
+      const matches = inventory.filter(i => i.item_name.toLowerCase().includes(val.toLowerCase()));
+      setSuggestions(matches);
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectSuggestion = (item) => {
+    setFormData({
+      ...formData,
+      item_name: item.item_name,
+      category: item.category || '',
+      active_ingredient: item.active_ingredient || '',
+      unit: item.unit || '',
+      phi_days: item.phi_days || '0',
+      dosage: item.dosage || '',
+      purpose: item.purpose || '',
+      usage_method: item.usage_method || '',
+      supplier: item.supplier || ''
+    });
+    setShowSuggestions(false);
+  };
 
   const handleAddItem = (e) => {
     e.preventDefault();
     try {
-      addInventoryItem({
+      const newItem = {
         ...formData,
         current_stock: Number(formData.current_stock),
         min_threshold: Number(formData.min_threshold),
         phi_days: Number(formData.phi_days)
-      });
+      };
+
+      if (user?.role === 'admin') {
+        addInventoryItem(newItem);
+      } else {
+        addFarmerInventoryItem({ ...newItem, farmer_id: user.id });
+      }
+
       setShowAddModal(false);
       setErrorMsg('');
       setFormData({
@@ -42,7 +82,11 @@ const InventoryList = () => {
   const handleAdjustStock = (e) => {
     e.preventDefault();
     if (selectedItem) {
-      updateStock(selectedItem.id, Number(adjustAmount));
+      if (user?.role === 'admin') {
+        updateStock(selectedItem.id, Number(adjustAmount));
+      } else {
+        updateFarmerStock(selectedItem.id, Number(adjustAmount));
+      }
       setShowAdjustModal(false);
       setAdjustAmount('');
     }
@@ -51,12 +95,10 @@ const InventoryList = () => {
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-4">
-        <h2>Quản lý Kho Vật Tư</h2>
-        {user?.role === 'admin' && (
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <Plus size={18} /> Nhập lô mới
-          </button>
-        )}
+        <h2>{user?.role === 'admin' ? 'Quản lý Kho Vật Tư (Hệ thống)' : 'Kho Vật Tư Cá Nhân'}</h2>
+        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <Plus size={18} /> Nhập lô mới
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -69,11 +111,11 @@ const InventoryList = () => {
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600, minWidth: '200px' }}>Hướng dẫn sử dụng</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Tồn kho</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Hạn sử dụng</th>
-              {user?.role === 'admin' && <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Thao tác</th>}
+              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            {inventory.map(item => {
+            {displayInventory.map(item => {
               const isLowStock = item.current_stock <= item.min_threshold;
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -99,15 +141,13 @@ const InventoryList = () => {
                     </div>
                   </td>
                   <td style={{ padding: 'var(--spacing-4)' }}>{item.expiry_date}</td>
-                  {user?.role === 'admin' && (
-                    <td style={{ padding: 'var(--spacing-4)' }}>
-                      <div className="flex gap-2">
-                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setShowAdjustModal(true); }}>
-                          <ArrowDownToLine size={16} title="Nhập thêm" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
+                  <td style={{ padding: 'var(--spacing-4)' }}>
+                    <div className="flex gap-2">
+                      <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setShowAdjustModal(true); }}>
+                        <ArrowDownToLine size={16} title="Nhập thêm" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -128,9 +168,18 @@ const InventoryList = () => {
                     {errorMsg}
                   </div>
                 )}
-                <div className="input-group" style={{ gridColumn: '1 / -1' }}>
-                  <label className="input-label">Tên vật tư</label>
-                  <input type="text" className="input-field" required value={formData.item_name} onChange={e => setFormData({...formData, item_name: e.target.value})} />
+                <div className="input-group" style={{ gridColumn: '1 / -1', position: 'relative' }}>
+                  <label className="input-label">Tên vật tư {user?.role === 'farmer' && '(Gõ để tìm kiếm từ danh mục chuẩn)'}</label>
+                  <input type="text" className="input-field" required value={formData.item_name} onChange={handleNameChange} onFocus={() => user?.role === 'farmer' && formData.item_name.length > 1 && setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', zIndex: 10, listStyle: 'none', padding: 0, margin: 0, maxHeight: '200px', overflowY: 'auto', boxShadow: 'var(--shadow-md)' }}>
+                      {suggestions.map(s => (
+                        <li key={s.id} onClick={() => selectSuggestion(s)} style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+                          <strong>{s.item_name}</strong> - <span style={{fontSize:'0.85rem', color: 'var(--text-secondary)'}}>{s.active_ingredient}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div className="input-group">
                   <label className="input-label">Phân loại</label>

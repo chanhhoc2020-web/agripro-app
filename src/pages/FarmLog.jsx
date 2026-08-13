@@ -16,7 +16,7 @@ import { Sprout } from 'lucide-react';
 
 
 const FarmLog = () => {
-  const { farmLogs, addFarmLog, plantingZones, inventory, user, users } = useAppContext();
+  const { farmLogs, addFarmLog, plantingZones, inventory, farmerInventory, user, users } = useAppContext();
   const [showAddLog, setShowAddLog] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -25,6 +25,7 @@ const FarmLog = () => {
     cropName: '',
     puc_code: '',
     inventory_item_id: '',
+    item_name_text: '',
     quantity_used: '',
     notes: '',
     photo_url: '',
@@ -90,6 +91,7 @@ const FarmLog = () => {
         action_type: selectedAction.name,
         timestamp: new Date().toISOString(),
         inventory_item_id: formData.inventory_item_id || null,
+        item_name_text: formData.item_name_text || null,
         quantity_used: Number(formData.quantity_used) || 0,
         operator_name: user?.name,
         photo_url: formData.photo_url,
@@ -99,7 +101,7 @@ const FarmLog = () => {
       setShowAddLog(false);
       setSelectedAction(null);
       setErrorMsg('');
-      setFormData({ cropName: '', puc_code: '', inventory_item_id: '', quantity_used: '', notes: '', photo_url: '', location: null });
+      setFormData({ cropName: '', puc_code: '', inventory_item_id: '', item_name_text: '', quantity_used: '', notes: '', photo_url: '', location: null });
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -180,14 +182,15 @@ const FarmLog = () => {
             const aiDataUrl = aiCanvas.toDataURL('image/jpeg', 0.9);
 
             const filterCategory = selectedAction?.name === 'Bón phân' ? 'Phân bón' : 'Thuốc BVTV';
-            const currentAvailableItems = inventory.filter(i => i.category === filterCategory);
+            const globalAvailableItems = inventory.filter(i => i.category === filterCategory);
+            const myFarmerInventory = farmerInventory.filter(i => i.farmer_id === user?.id && i.category === filterCategory);
 
             fetch('/api/gemini-ocr', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 imageBase64: aiDataUrl,
-                inventoryList: currentAvailableItems.map(item => ({ id: item.id, item_name: item.item_name }))
+                inventoryList: globalAvailableItems.map(item => ({ id: item.id, item_name: item.item_name }))
               })
             })
             .then(res => res.json())
@@ -198,10 +201,17 @@ const FarmLog = () => {
                 return;
               }
               if (data.matchedId) {
-                const matchedItem = currentAvailableItems.find(i => i.id === data.matchedId);
-                if (matchedItem) {
-                  setFormData(prev => ({ ...prev, inventory_item_id: matchedItem.id }));
-                  alert(`Đã nhận diện chính xác: ${matchedItem.item_name}`);
+                const matchedGlobalItem = globalAvailableItems.find(i => i.id === data.matchedId);
+                if (matchedGlobalItem) {
+                  // Check if farmer has this in their personal inventory
+                  const personalItem = myFarmerInventory.find(i => i.item_name === matchedGlobalItem.item_name);
+                  if (personalItem) {
+                    setFormData(prev => ({ ...prev, inventory_item_id: personalItem.id, item_name_text: '' }));
+                    alert(`Đã nhận diện chính xác: ${matchedGlobalItem.item_name} (Có sẵn trong kho cá nhân)`);
+                  } else {
+                    setFormData(prev => ({ ...prev, inventory_item_id: '', item_name_text: matchedGlobalItem.item_name }));
+                    alert(`Đã nhận diện: ${matchedGlobalItem.item_name}. Bạn chưa nhập lô hàng này vào Kho cá nhân nên hệ thống chỉ ghi lại tên.`);
+                  }
                 } else {
                   alert('AI trả về mã không hợp lệ. Vui lòng chọn thủ công.');
                 }
@@ -254,10 +264,12 @@ const FarmLog = () => {
 
   if (showAddLog && selectedAction) {
     const needsInventory = ['Bón phân', 'Phun thuốc'].includes(selectedAction.name);
-    const filterCategory = selectedAction.name === 'Bón phân' ? 'Phun bón' : (selectedAction.name === 'Phun thuốc' ? 'Thuốc BVTV' : null);
-    const availableItems = filterCategory ? inventory.filter(i => i.category === filterCategory || (selectedAction.name === 'Bón phân' && i.category === 'Phân bón')) : [];
+    const filterCategory = selectedAction.name === 'Bón phân' ? 'Phân bón' : (selectedAction.name === 'Phun thuốc' ? 'Thuốc BVTV' : null);
+    
+    // Nông dân chỉ chọn từ kho cá nhân của họ
+    const availableItems = filterCategory ? farmerInventory.filter(i => i.farmer_id === user?.id && i.category === filterCategory) : [];
     const selectedItemDetail = availableItems.find(i => i.id === formData.inventory_item_id);
-    const unitLabel = selectedItemDetail ? `(${selectedItemDetail.unit})` : '';
+    const unitLabel = selectedItemDetail ? `(${selectedItemDetail.unit})` : (formData.item_name_text ? '(kg/lít)' : '');
 
     return (
       <div className="animate-fade-in" style={{ padding: 'var(--spacing-4)', maxWidth: '600px', margin: '0 auto' }}>
@@ -325,15 +337,34 @@ const FarmLog = () => {
               <>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                    Tên vật tư (AI tự động chọn)
+                    Vật tư (Kho cá nhân) / Tên (Nhập tay)
                     {isScanning && <span style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>Đang quét AI...</span>}
                   </label>
-                  <select className="input-field" style={{ padding: '12px', fontSize: '1rem' }} required value={formData.inventory_item_id} onChange={e => setFormData({...formData, inventory_item_id: e.target.value})}>
-                    <option value="">-- Chọn loại vật tư --</option>
+                  <select 
+                    className="input-field" 
+                    style={{ padding: '12px', fontSize: '1rem', marginBottom: '8px' }} 
+                    value={formData.inventory_item_id} 
+                    onChange={e => setFormData({...formData, inventory_item_id: e.target.value, item_name_text: ''})}
+                  >
+                    <option value="">-- Chọn từ Kho Cá Nhân --</option>
                     {availableItems.map(item => (
                       <option key={item.id} value={item.id}>{item.item_name} (Tồn: {item.current_stock} {item.unit})</option>
                     ))}
                   </select>
+                  
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>HOẶC</div>
+                  
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    style={{ padding: '12px', fontSize: '1rem' }} 
+                    placeholder="Gõ tên vật tư (Nếu không có trong kho)"
+                    value={formData.item_name_text}
+                    onChange={e => setFormData({...formData, item_name_text: e.target.value, inventory_item_id: ''})}
+                  />
+                  {!(formData.inventory_item_id || formData.item_name_text) && (
+                    <span style={{ fontSize: '0.85rem', color: 'var(--danger)', marginTop: '4px', display: 'block' }}>Vui lòng chọn hoặc nhập tên vật tư</span>
+                  )}
                 </div>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem' }}>Số lượng/Liều lượng {unitLabel}</label>
@@ -402,7 +433,8 @@ const FarmLog = () => {
           })
           .slice().reverse().map(log => {
           const zone = plantingZones.find(z => z.puc_code === log.puc_code);
-          const item = inventory.find(i => i.id === log.inventory_item_id);
+          const fItem = farmerInventory.find(i => i.id === log.inventory_item_id);
+          const itemNameDisplay = fItem ? fItem.item_name : (log.item_name_text || log.inventory_item_id);
           const date = new Date(log.timestamp).toLocaleString('vi-VN');
           
           let actionIcon = ACTION_TYPES.find(a => a.name === log.action_type)?.icon || Tractor;
@@ -425,8 +457,8 @@ const FarmLog = () => {
                 <p><strong>Vùng trồng:</strong> {zone ? `${zone.puc_code} - ${zone.zone_name}` : log.puc_code}</p>
                 <p><strong>Sản phẩm:</strong> {log.cropName || zone?.crop_type || 'N/A'}</p>
                 <p><strong>Người thực hiện:</strong> {log.operator_name}</p>
-                {item && (
-                  <p><strong>Vật tư:</strong> {item.item_name} (Dùng: {log.quantity_used} {item.unit})</p>
+                {(log.inventory_item_id || log.item_name_text) && (
+                  <p><strong>Vật tư:</strong> {itemNameDisplay} (Dùng: {log.quantity_used} {fItem ? fItem.unit : ''})</p>
                 )}
                 {log.location && (
                   <p style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)' }}>
