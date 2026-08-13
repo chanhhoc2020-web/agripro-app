@@ -12,16 +12,16 @@ const Login = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    
-    // Mock authentication
-    if (role === 'admin' && pin === '1234') {
-      login('admin', 'Ban Quản Lý');
-      navigate('/');
-    } else if (role === 'farmer' && pin.length === 4) {
-      login('farmer', `Nông dân ${phone.slice(-4)}`);
-      navigate('/farmlog');
-    } else {
-      alert('Thông tin đăng nhập không hợp lệ! (Gợi ý: Admin dùng PIN 1234, Nông dân dùng PIN 4 số bất kỳ)');
+    try {
+      if (role === 'admin') {
+        login('admin', '', pin);
+        navigate('/');
+      } else {
+        login('farmer', phone, pin);
+        navigate('/farmlog');
+      }
+    } catch (error) {
+      alert(error.message);
     }
   };
 

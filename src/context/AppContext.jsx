@@ -12,6 +12,7 @@ export const AppProvider = ({ children }) => {
   const [inventory, setInventory] = useState([]);
   const [farmLogs, setFarmLogs] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [users, setUsers] = useState([]);
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('agripro_user');
     return saved ? JSON.parse(saved) : null;
@@ -43,18 +44,35 @@ export const AppProvider = ({ children }) => {
     const unsubBatches = onSnapshot(collection(db, 'batches'), (snapshot) => {
       setBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
     return () => {
       unsubZones();
       unsubInventory();
       unsubLogs();
       unsubBatches();
+      unsubUsers();
     };
   }, []);
 
   // Auth functions
-  const login = (role, name) => {
-    setUser({ role, name });
+  const login = (role, inputPhone, inputPin) => {
+    if (role === 'admin') {
+      if (inputPin === '1234') {
+        setUser({ role: 'admin', name: 'Ban Quản Lý' });
+        return true;
+      }
+      throw new Error('Mã PIN Admin không chính xác!');
+    } else {
+      const farmerAcc = users.find(u => u.phone === inputPhone && u.pin === inputPin && u.role === 'farmer');
+      if (farmerAcc) {
+        setUser(farmerAcc);
+        return true;
+      }
+      throw new Error('Số điện thoại hoặc mã PIN không đúng, hoặc tài khoản chưa được cấp!');
+    }
   };
   
   const logout = () => {
@@ -72,6 +90,21 @@ export const AppProvider = ({ children }) => {
 
   const deleteZone = async (id) => {
     await deleteDoc(doc(db, 'planting_zones', id));
+  };
+
+  // User Management (Admin)
+  const addUser = async (userData) => {
+    // Check if phone already exists
+    if (users.find(u => u.phone === userData.phone)) {
+      throw new Error('Số điện thoại này đã được đăng ký!');
+    }
+    await addDoc(collection(db, 'users'), userData);
+  };
+  const updateUser = async (id, userData) => {
+    await updateDoc(doc(db, 'users', id), userData);
+  };
+  const deleteUser = async (id) => {
+    await deleteDoc(doc(db, 'users', id));
   };
 
   // Inventory functions
@@ -146,6 +179,7 @@ export const AppProvider = ({ children }) => {
       inventory, addInventoryItem, updateStock,
       farmLogs, addFarmLog,
       batches, addBatch,
+      users, addUser, updateUser, deleteUser,
       bannedIngredients
     }}>
       {children}

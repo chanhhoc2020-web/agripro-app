@@ -37,7 +37,14 @@ const FarmLog = () => {
   // Auto-fetch GPS and set default PUC when action is selected
   useEffect(() => {
     if (showAddLog && selectedAction) {
-      if (activeZones.length > 0) {
+      if (user?.role === 'farmer' && user?.puc_code) {
+        const assignedZone = plantingZones.find(z => z.puc_code === user.puc_code);
+        setFormData(prev => ({
+          ...prev,
+          puc_code: user.puc_code,
+          cropName: assignedZone ? assignedZone.crop_type : ''
+        }));
+      } else if (activeZones.length > 0) {
         setFormData(prev => ({ 
           ...prev, 
           puc_code: activeZones[0].puc_code, 
@@ -272,6 +279,26 @@ const FarmLog = () => {
               </div>
             )}
             
+            <div className="input-group">
+              <label className="input-label" style={{ fontSize: '1rem' }}>Mã vùng trồng (PUC)</label>
+              <select 
+                className="input-field" 
+                style={{ padding: '12px', fontSize: '1rem' }} 
+                required 
+                value={formData.puc_code} 
+                onChange={e => {
+                  const zone = plantingZones.find(z => z.puc_code === e.target.value);
+                  setFormData({...formData, puc_code: e.target.value, cropName: zone ? zone.crop_type : ''});
+                }}
+                disabled={user?.role === 'farmer'}
+              >
+                <option value="">-- Chọn vùng trồng --</option>
+                {activeZones.map(zone => (
+                  <option key={zone.id} value={zone.puc_code}>{zone.puc_code} - {zone.crop_type}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="input-group">
               <label className="input-label" style={{ fontSize: '1rem', display: 'flex', flexDirection: 'column' }}>
                 {needsInventory ? 'Chụp ảnh vật tư' : 'Ảnh minh chứng'}

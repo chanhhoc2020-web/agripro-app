@@ -10,6 +10,7 @@ import PUCList from './pages/PUCList';
 import InventoryList from './pages/InventoryList';
 import FarmLog from './pages/FarmLog';
 import TraceabilityPage from './pages/TraceabilityPage';
+import UsersManagement from './pages/UsersManagement';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user } = useAppContext();
@@ -49,6 +50,12 @@ function AppRoutes() {
         <Route path="inventory" element={
           <ProtectedRoute allowedRoles={['admin', 'farmer']}>
             <InventoryList />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="users" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <UsersManagement />
           </ProtectedRoute>
         } />
         
