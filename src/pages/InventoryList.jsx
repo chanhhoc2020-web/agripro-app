@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload, History } from 'lucide-react';
+import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload, History, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const InventoryList = () => {
   const { inventory, inventoryLogs, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, updateInventoryItem, users } = useAppContext();
   const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
+  const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editItemId, setEditItemId] = useState(null);
@@ -244,10 +245,35 @@ const InventoryList = () => {
     reader.readAsBinaryString(file);
   };
 
+  const filteredDisplayInventory = displayInventory.filter(item => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (item.item_name && item.item_name.toLowerCase().includes(term)) ||
+      (item.active_ingredient && item.active_ingredient.toLowerCase().includes(term)) ||
+      (item.category && item.category.toLowerCase().includes(term))
+    );
+  });
+
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-4">
-        <h2>{user?.role === 'admin' ? 'Quản lý Kho Vật Tư (Hệ thống)' : 'Kho Vật Tư Cá Nhân'}</h2>
+        <h2 style={{ whiteSpace: 'nowrap' }}>{user?.role === 'admin' ? 'Quản lý Kho Vật Tư' : 'Kho Vật Tư Cá Nhân'}</h2>
+        
+        <div style={{ flex: 1, margin: '0 20px', display: 'flex', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+            <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="Tìm kiếm tên, hoạt chất..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: '100%', paddingLeft: '35px' }}
+            />
+          </div>
+        </div>
+
         <div className="flex gap-2">
           {user?.role === 'admin' && (
             <>
@@ -293,7 +319,7 @@ const InventoryList = () => {
             </tr>
           </thead>
           <tbody>
-            {displayInventory.map((item, index) => {
+            {filteredDisplayInventory.map((item, index) => {
               const isLowStock = item.current_stock <= item.min_threshold;
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -351,6 +377,13 @@ const InventoryList = () => {
                 </tr>
               );
             })}
+            {filteredDisplayInventory.length === 0 && (
+              <tr>
+                <td colSpan="9" style={{ padding: 'var(--spacing-8)', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  Không tìm thấy vật tư nào phù hợp.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
