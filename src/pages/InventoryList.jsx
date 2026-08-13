@@ -12,7 +12,8 @@ const InventoryList = () => {
   const [formData, setFormData] = useState({
     item_name: '', category: 'Phân bón', active_ingredient: '',
     unit: 'kg', current_stock: '', min_threshold: '',
-    expiry_date: '', supplier: '', phi_days: '0'
+    expiry_date: '', supplier: '', phi_days: '0',
+    dosage: '', purpose: '', usage_method: ''
   });
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -30,7 +31,8 @@ const InventoryList = () => {
       setFormData({
         item_name: '', category: 'Phân bón', active_ingredient: '',
         unit: 'kg', current_stock: '', min_threshold: '',
-        expiry_date: '', supplier: '', phi_days: '0'
+        expiry_date: '', supplier: '', phi_days: '0',
+        dosage: '', purpose: '', usage_method: ''
       });
     } catch (err) {
       setErrorMsg(err.message);
@@ -160,6 +162,18 @@ const InventoryList = () => {
                 <div className="input-group">
                   <label className="input-label">Nhà cung cấp</label>
                   <input type="text" className="input-field" required value={formData.supplier} onChange={e => setFormData({...formData, supplier: e.target.value})} />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Liều lượng dùng (Tùy chọn)</label>
+                  <input type="text" className="input-field" value={formData.dosage} onChange={e => setFormData({...formData, dosage: e.target.value})} placeholder="VD: Pha 25ml/ 25 lít nước" />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Mục đích sử dụng (Tùy chọn)</label>
+                  <input type="text" className="input-field" value={formData.purpose} onChange={e => setFormData({...formData, purpose: e.target.value})} placeholder="VD: Ngừa nấm, phục hồi rễ..." />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Cách sử dụng (Tùy chọn)</label>
+                  <input type="text" className="input-field" value={formData.usage_method} onChange={e => setFormData({...formData, usage_method: e.target.value})} placeholder="VD: Phun, tưới gốc..." />
                 </div>
               </div>
               <div className="modal-footer">
