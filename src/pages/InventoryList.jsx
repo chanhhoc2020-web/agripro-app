@@ -15,7 +15,7 @@ const InventoryList = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [adjustAmount, setAdjustAmount] = useState('');
+  const [adjustData, setAdjustData] = useState({ quantity: '', expiry_date: '' });
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportData, setExportData] = useState({
     farmer_id: '',
@@ -132,16 +132,47 @@ const InventoryList = () => {
     }
   };
 
-  const handleAdjustStock = (e) => {
+  const handleAdjustStock = async (e) => {
     e.preventDefault();
     if (selectedItem) {
-      if (user?.role === 'admin') {
-        updateStock(selectedItem.id, Number(adjustAmount));
+      const qty = Number(adjustData.quantity);
+      const newExpiry = adjustData.expiry_date;
+      
+      if (newExpiry === selectedItem.expiry_date) {
+        // Trường hợp 1: Trùng HSD cũ -> Cộng dồn bình thường
+        if (user?.role === 'admin') {
+          await updateStock(selectedItem.id, qty);
+        } else {
+          await updateFarmerStock(selectedItem.id, qty);
+        }
       } else {
-        updateFarmerStock(selectedItem.id, Number(adjustAmount));
+        // HSD mới -> Kiểm tra trong kho xem đã có lô nào trùng tên và trùng HSD mới này chưa
+        const inventoryList = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
+        const existingBatch = inventoryList.find(i => 
+          i.item_name === selectedItem.item_name && 
+          i.expiry_date === newExpiry
+        );
+        
+        if (existingBatch) {
+          // Trường hợp 3: Có lô trùng -> Cộng dồn vào lô đó
+          if (user?.role === 'admin') {
+            await updateStock(existingBatch.id, qty);
+          } else {
+            await updateFarmerStock(existingBatch.id, qty);
+          }
+        } else {
+          // Trường hợp 2: Chưa có lô trùng -> Tạo lô mới hoàn toàn
+          const newItem = { ...selectedItem, current_stock: qty, expiry_date: newExpiry };
+          delete newItem.id;
+          if (user?.role === 'admin') {
+            await addInventoryItem(newItem);
+          } else {
+            await addFarmerInventoryItem({...newItem, farmer_id: user.id});
+          }
+        }
       }
       setShowAdjustModal(false);
-      setAdjustAmount('');
+      setAdjustData({ quantity: '', expiry_date: '' });
     }
   };
 
@@ -427,7 +458,7 @@ const InventoryList = () => {
                   )}
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <div className="flex gap-2">
-                      <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setShowAdjustModal(true); }}>
+                      <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setAdjustData({ quantity: '', expiry_date: item.expiry_date || '' }); setShowAdjustModal(true); }}>
                         <ArrowDownToLine size={16} title="Nhập thêm" />
                       </button>
                       {user?.role === 'admin' && (
@@ -570,8 +601,12 @@ const InventoryList = () => {
               <div className="modal-body">
                 <p style={{ marginBottom: 'var(--spacing-4)' }}>Vật tư: <strong>{selectedItem.item_name}</strong></p>
                 <div className="input-group">
+                  <label className="input-label">Hạn sử dụng lô nhập thêm</label>
+                  <input type="date" className="input-field" required value={adjustData.expiry_date} onChange={e => setAdjustData({...adjustData, expiry_date: e.target.value})} />
+                </div>
+                <div className="input-group">
                   <label className="input-label">Số lượng nhập thêm ({selectedItem.unit})</label>
-                  <input type="number" className="input-field" required value={adjustAmount} onChange={e => setAdjustAmount(e.target.value)} />
+                  <input type="number" className="input-field" required value={adjustData.quantity} onChange={e => setAdjustData({...adjustData, quantity: e.target.value})} />
                 </div>
               </div>
               <div className="modal-footer">
