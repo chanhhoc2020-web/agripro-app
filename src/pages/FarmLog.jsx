@@ -381,7 +381,7 @@ const FarmLog = () => {
             >
               <option value="">Tất cả nông dân</option>
               {farmersList.map(f => (
-                <option key={f.id} value={f.puc_code}>{f.name} ({f.puc_code})</option>
+                <option key={f.id} value={f.name}>{f.name} ({f.puc_code})</option>
               ))}
             </select>
           )}
@@ -394,10 +394,10 @@ const FarmLog = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {farmLogs
           .filter(log => {
-            // Nông dân chỉ thấy nhật ký của vùng trồng được gán cho họ
-            if (user?.role === 'farmer') return log.puc_code === user.puc_code;
-            // Admin thì thấy tất cả, nhưng có thể lọc
-            if (user?.role === 'admin' && adminFilterUser) return log.puc_code === adminFilterUser;
+            // Nông dân chỉ thấy nhật ký của chính họ tạo ra
+            if (user?.role === 'farmer') return log.operator_name === user?.name;
+            // Admin thì thấy tất cả, nhưng có thể lọc theo tên nông dân
+            if (user?.role === 'admin' && adminFilterUser) return log.operator_name === adminFilterUser;
             return true;
           })
           .slice().reverse().map(log => {

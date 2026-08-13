@@ -9,7 +9,7 @@ const Dashboard = () => {
   const lowStockItems = inventory.filter(i => i.current_stock <= i.min_threshold).length;
   
   if (user?.role === 'farmer') {
-    const farmerLogsCount = farmLogs.filter(log => log.puc_code === user.puc_code).length;
+    const farmerLogsCount = farmLogs.filter(log => log.operator_name === user?.name).length;
     return (
       <div className="animate-fade-in">
         <h2 style={{ marginBottom: 'var(--spacing-6)' }}>Tổng quan - Nông dân</h2>
