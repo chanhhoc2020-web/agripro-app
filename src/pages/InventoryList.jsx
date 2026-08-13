@@ -88,7 +88,7 @@ const InventoryList = () => {
     setShowAddModal(true);
   };
 
-  const handleAddItem = (e) => {
+  const handleAddItem = async (e) => {
     e.preventDefault();
     try {
       const newItem = {
