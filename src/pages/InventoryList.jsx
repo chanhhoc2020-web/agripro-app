@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload, History, Search } from 'lucide-react';
+import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload, History, Search, ChevronRight, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const InventoryList = () => {
@@ -15,6 +15,8 @@ const InventoryList = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [adjustData, setAdjustData] = useState({ quantity: '', expiry_date: '' });
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportData, setExportData] = useState({
@@ -178,22 +180,48 @@ const InventoryList = () => {
 
   const handleExportStock = async (e) => {
     e.preventDefault();
-    if (selectedItem) {
-      try {
+    try {
+      let remainingQty = Number(exportData.quantity);
+      
+      if (selectedItem) {
+        if (remainingQty > selectedItem.current_stock) throw new Error(`Vượt quá tồn kho của lô này (Chỉ còn ${selectedItem.current_stock})!`);
         await exportInventoryItem({
           global_inventory_id: selectedItem.id,
           farmer_id: exportData.farmer_id || null,
-          quantity: Number(exportData.quantity),
+          quantity: remainingQty,
           unit_price: Number(exportData.unit_price) || 0,
-          total_price: (Number(exportData.quantity) * (Number(exportData.unit_price) || 0)),
+          total_price: remainingQty * (Number(exportData.unit_price) || 0),
           payment_status: exportData.payment_status,
           notes: exportData.notes
         });
-        setShowExportModal(false);
-        setExportData({ farmer_id: '', quantity: '', unit_price: '', payment_status: 'Đã thanh toán', notes: '' });
-      } catch (err) {
-        alert(err.message);
+      } else if (selectedGroup) {
+        if (remainingQty > selectedGroup.total_stock) throw new Error(`Vượt quá tổng tồn kho (Chỉ còn ${selectedGroup.total_stock})!`);
+        
+        const sortedBatches = [...selectedGroup.batches].sort((a,b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+        for (const batch of sortedBatches) {
+          if (remainingQty <= 0) break;
+          if (batch.current_stock <= 0) continue;
+          
+          const deductQty = Math.min(remainingQty, batch.current_stock);
+          await exportInventoryItem({
+            global_inventory_id: batch.id,
+            farmer_id: exportData.farmer_id || null,
+            quantity: deductQty,
+            unit_price: Number(exportData.unit_price) || 0,
+            total_price: deductQty * (Number(exportData.unit_price) || 0),
+            payment_status: exportData.payment_status,
+            notes: exportData.notes + (selectedGroup.batches.length > 1 ? ` (Tự động FIFO từ lô HSD: ${batch.expiry_date})` : '')
+          });
+          remainingQty -= deductQty;
+        }
       }
+
+      setShowExportModal(false);
+      setExportData({ farmer_id: '', quantity: '', unit_price: '', payment_status: 'Đã thanh toán', notes: '' });
+      setSelectedItem(null);
+      setSelectedGroup(null);
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -297,6 +325,39 @@ const InventoryList = () => {
     return new Date(a.expiry_date) - new Date(b.expiry_date);
   });
 
+  const groupedMap = new Map();
+  sortedDisplayInventory.forEach(item => {
+    const key = item.item_name;
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        ...item,
+        total_stock: item.current_stock,
+        batches: [item],
+        nearest_expiry: item.expiry_date
+      });
+    } else {
+      const group = groupedMap.get(key);
+      group.total_stock += item.current_stock;
+      group.batches.push(item);
+      if (item.expiry_date) {
+        if (!group.nearest_expiry || new Date(item.expiry_date) < new Date(group.nearest_expiry)) {
+          group.nearest_expiry = item.expiry_date;
+          group.expiry_warning_days = item.expiry_warning_days;
+        }
+      }
+    }
+  });
+  const groupedInventory = Array.from(groupedMap.values());
+
+  const toggleGroup = (itemName) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(itemName)) next.delete(itemName);
+      else next.add(itemName);
+      return next;
+    });
+  };
+
   const openExportModal = (item) => {
     if (item.expiry_date) {
       const expiry = new Date(item.expiry_date);
@@ -323,7 +384,24 @@ const InventoryList = () => {
     }
 
     setSelectedItem(item);
+    setSelectedGroup(null);
     setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price ? Math.round(item.selling_price) : '', payment_status: 'Đã thanh toán', notes: '' });
+    setShowExportModal(true);
+  };
+
+  const openGroupExportModal = (group) => {
+    if (group.nearest_expiry) {
+      const expiry = new Date(group.nearest_expiry);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (expiry < today) {
+        alert("🚨 Lô hàng cũ nhất của mặt hàng này đã hết hạn. Vui lòng mở chi tiết các lô để xử lý lô hết hạn trước khi xuất kho!");
+        return;
+      }
+    }
+    setSelectedGroup(group);
+    setSelectedItem(null);
+    setExportData({ farmer_id: '', quantity: '', unit_price: group.selling_price ? Math.round(group.selling_price) : '', payment_status: 'Đã thanh toán', notes: '' });
     setShowExportModal(true);
   };
 
@@ -391,95 +469,142 @@ const InventoryList = () => {
             </tr>
           </thead>
           <tbody>
-            {sortedDisplayInventory.map((item, index) => {
-              const isLowStock = item.current_stock <= item.min_threshold;
+            {groupedInventory.map((group, index) => {
+              const isExpanded = expandedGroups.has(group.item_name);
+              const isLowStock = group.total_stock <= group.min_threshold;
+              
               return (
-                <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: 'var(--spacing-4)', textAlign: 'center', fontWeight: 500 }}>{index + 1}</td>
-                  <td style={{ padding: 'var(--spacing-4)' }}>
-                    <div style={{ fontWeight: 500 }}>{item.item_name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.supplier}</div>
-                  </td>
-                  <td style={{ padding: 'var(--spacing-4)' }}>{item.category}</td>
-                  <td style={{ padding: 'var(--spacing-4)', fontSize: '0.85rem' }}>
-                    {item.active_ingredient && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Hoạt chất:</strong> <span className="badge badge-neutral" style={{fontSize: '0.75rem'}}>{item.active_ingredient}</span></div>}
-                    {item.purpose && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Mục đích:</strong> {item.purpose}</div>}
-                    {item.usage_method && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Cách dùng:</strong> {item.usage_method}</div>}
-                    {item.dosage && <div><strong style={{color: 'var(--primary)'}}>Liều lượng:</strong> {item.dosage}</div>}
-                  </td>
-                  <td style={{ padding: 'var(--spacing-4)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontWeight: 600, color: isLowStock ? 'var(--danger)' : 'var(--text-primary)' }}>
-                        {item.current_stock} {item.unit}
-                      </span>
-                      {isLowStock && <AlertTriangle size={16} color="var(--danger)" title="Dưới ngưỡng an toàn" />}
-                    </div>
-                  </td>
-                  <td style={{ padding: 'var(--spacing-4)' }}>
-                    {(() => {
-                      if (!item.expiry_date) return '-';
-                      const expiry = new Date(item.expiry_date);
-                      const today = new Date();
-                      today.setHours(0,0,0,0);
-                      const diffTime = expiry - today;
-                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                      const warningDays = item.expiry_warning_days || 30;
+                <React.Fragment key={`group-${group.item_name}`}>
+                  <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: isExpanded ? 'rgba(0,0,0,0.02)' : 'transparent', transition: 'background-color 0.2s' }}>
+                    <td style={{ padding: 'var(--spacing-4)', textAlign: 'center', cursor: group.batches.length > 1 ? 'pointer' : 'default' }} onClick={() => group.batches.length > 1 && toggleGroup(group.item_name)}>
+                      <div className="flex items-center justify-center gap-1">
+                        {group.batches.length > 1 ? (isExpanded ? <ChevronDown size={18} color="var(--primary)"/> : <ChevronRight size={18} color="var(--text-secondary)"/>) : <span style={{width: 18}}></span>}
+                        <span style={{fontWeight: 600}}>{index + 1}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: 'var(--spacing-4)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '1.05rem', color: 'var(--primary)' }}>{group.item_name}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{group.supplier} {group.batches.length > 1 && <span className="badge badge-neutral" style={{marginLeft: '4px'}}>{group.batches.length} lô khác nhau</span>}</div>
+                    </td>
+                    <td style={{ padding: 'var(--spacing-4)' }}>{group.category}</td>
+                    <td style={{ padding: 'var(--spacing-4)', fontSize: '0.85rem' }}>
+                      {group.active_ingredient && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Hoạt chất:</strong> <span className="badge badge-neutral" style={{fontSize: '0.75rem'}}>{group.active_ingredient}</span></div>}
+                      {group.purpose && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Mục đích:</strong> {group.purpose}</div>}
+                    </td>
+                    <td style={{ padding: 'var(--spacing-4)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: isLowStock ? 'var(--danger)' : 'var(--text-primary)' }}>
+                          {group.total_stock} {group.unit}
+                        </span>
+                        {isLowStock && <AlertTriangle size={18} color="var(--danger)" title="Dưới ngưỡng an toàn" />}
+                      </div>
+                    </td>
+                    <td style={{ padding: 'var(--spacing-4)' }}>
+                      {(() => {
+                        if (!group.nearest_expiry) return '-';
+                        const expiry = new Date(group.nearest_expiry);
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const diffTime = expiry - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        const warningDays = group.expiry_warning_days || 30;
 
-                      if (diffDays < 0) {
-                        return (
-                          <div style={{ color: 'var(--danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>{item.expiry_date}</span>
-                            <AlertTriangle size={16} />
-                            <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--danger)', color: 'white', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>Đã hết hạn</span>
-                          </div>
-                        );
-                      } else if (diffDays <= warningDays) {
-                        return (
-                          <div style={{ color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>{item.expiry_date}</span>
-                            <AlertTriangle size={16} />
-                            <span style={{ fontSize: '0.75rem', backgroundColor: '#d97706', color: 'white', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>Sắp hết hạn</span>
-                          </div>
-                        );
-                      } else {
-                        return <span>{item.expiry_date}</span>;
-                      }
-                    })()}
-                  </td>
-                  {user?.role === 'admin' && (
-                    <td style={{ padding: 'var(--spacing-4)', fontWeight: 500 }}>
-                      {item.import_price ? item.import_price.toLocaleString('vi-VN') + ' đ' : '-'}
+                        if (diffDays < 0) {
+                          return (
+                            <div style={{ color: 'var(--danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>{group.nearest_expiry}</span>
+                              <AlertTriangle size={16} />
+                            </div>
+                          );
+                        } else if (diffDays <= warningDays) {
+                          return (
+                            <div style={{ color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>{group.nearest_expiry}</span>
+                              <AlertTriangle size={16} />
+                            </div>
+                          );
+                        } else {
+                          return <span>{group.nearest_expiry}</span>;
+                        }
+                      })()}
                     </td>
-                  )}
-                  {user?.role === 'admin' && (
-                    <td style={{ padding: 'var(--spacing-4)', fontWeight: 500, color: 'var(--danger)' }}>
-                      {item.selling_price ? item.selling_price.toLocaleString('vi-VN') + ' đ' : '-'}
+                    {user?.role === 'admin' && (
+                      <td style={{ padding: 'var(--spacing-4)', fontWeight: 500 }}>
+                        {group.import_price ? group.import_price.toLocaleString('vi-VN') + ' đ' : '-'}
+                      </td>
+                    )}
+                    {user?.role === 'admin' && (
+                      <td style={{ padding: 'var(--spacing-4)', fontWeight: 500, color: 'var(--danger)' }}>
+                        {group.selling_price ? group.selling_price.toLocaleString('vi-VN') + ' đ' : '-'}
+                      </td>
+                    )}
+                    <td style={{ padding: 'var(--spacing-4)' }}>
+                      <div className="flex gap-2">
+                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(group.batches[0]); setAdjustData({ quantity: '', expiry_date: '' }); setShowAdjustModal(true); }}>
+                          <ArrowDownToLine size={16} title="Nhập thêm" />
+                        </button>
+                        {user?.role === 'admin' && (
+                          <>
+                            <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--primary)', borderColor: 'var(--primary)' }} onClick={() => { setSelectedHistoryItem(group.batches[0]); setShowHistoryModal(true); }}>
+                              <History size={16} title="Xem Thẻ kho" />
+                            </button>
+                            <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleEditItem(group)}>
+                              <Pencil size={16} title="Sửa thông tin gốc" />
+                            </button>
+                            <button className="btn btn-primary" style={{ padding: '0.25rem 0.5rem', backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => openGroupExportModal(group)}>
+                              <ArrowUpFromLine size={16} title="Xuất kho Tự động (FIFO)" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
-                  )}
-                  <td style={{ padding: 'var(--spacing-4)' }}>
-                    <div className="flex gap-2">
-                      <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setAdjustData({ quantity: '', expiry_date: item.expiry_date || '' }); setShowAdjustModal(true); }}>
-                        <ArrowDownToLine size={16} title="Nhập thêm" />
-                      </button>
-                      {user?.role === 'admin' && (
-                        <>
-                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--primary)', borderColor: 'var(--primary)' }} onClick={() => { setSelectedHistoryItem(item); setShowHistoryModal(true); }}>
-                            <History size={16} title="Xem Thẻ kho" />
-                          </button>
-                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleEditItem(item)}>
-                            <Pencil size={16} title="Chỉnh sửa thông tin" />
-                          </button>
-                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => openExportModal(item)}>
-                            <ArrowUpFromLine size={16} title="Xuất kho" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                  </tr>
+
+                  {isExpanded && group.batches.length > 1 && group.batches.map((batch, bIndex) => (
+                    <tr key={batch.id} className="animate-fade-in" style={{ backgroundColor: 'rgba(0,0,0,0.02)', borderBottom: '1px dashed var(--border)' }}>
+                      <td style={{ padding: 'var(--spacing-3)' }}></td>
+                      <td style={{ padding: 'var(--spacing-3)', paddingLeft: '3rem' }} colSpan="3">
+                        <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                          <span style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>↳ Lô {bIndex + 1}:</span>
+                          <span style={{fontSize: '0.85rem'}}>{batch.supplier}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: 'var(--spacing-3)' }}>
+                        <span style={{ fontWeight: 600 }}>{batch.current_stock}</span> {batch.unit}
+                      </td>
+                      <td style={{ padding: 'var(--spacing-3)' }}>
+                        {(() => {
+                           if (!batch.expiry_date) return '-';
+                           const expiry = new Date(batch.expiry_date);
+                           const today = new Date();
+                           today.setHours(0,0,0,0);
+                           const diffTime = expiry - today;
+                           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                           const warningDays = batch.expiry_warning_days || 30;
+                           if (diffDays < 0) return <span style={{ color: 'white', backgroundColor: 'var(--danger)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{batch.expiry_date} (Hết hạn)</span>;
+                           if (diffDays <= warningDays) return <span style={{ color: 'white', backgroundColor: '#d97706', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{batch.expiry_date} (Sắp hết)</span>;
+                           return <span style={{fontSize: '0.85rem'}}>{batch.expiry_date}</span>;
+                        })()}
+                      </td>
+                      {user?.role === 'admin' && <td colSpan="2"></td>}
+                      <td style={{ padding: 'var(--spacing-3)' }}>
+                         <div className="flex gap-2">
+                           <button className="btn btn-outline" style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem' }} onClick={() => { setSelectedItem(batch); setAdjustData({ quantity: '', expiry_date: batch.expiry_date || '' }); setShowAdjustModal(true); }}>
+                             Nhập thêm
+                           </button>
+                           {user?.role === 'admin' && (
+                             <button className="btn btn-outline" style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => openExportModal(batch)}>
+                               Xuất Lô này
+                             </button>
+                           )}
+                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
               );
             })}
-            {filteredDisplayInventory.length === 0 && (
+            {groupedInventory.length === 0 && (
               <tr>
                 <td colSpan="9" style={{ padding: 'var(--spacing-8)', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   Không tìm thấy vật tư nào phù hợp.
@@ -618,7 +743,7 @@ const InventoryList = () => {
         </div>
       )}
 
-      {showExportModal && selectedItem && (
+      {(showExportModal && (selectedItem || selectedGroup)) && (
         <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -628,7 +753,7 @@ const InventoryList = () => {
               <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-4)' }}>
                 <div className="input-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="input-label">Tên vật tư xuất</label>
-                  <input type="text" className="input-field" value={selectedItem.item_name} disabled style={{ backgroundColor: 'var(--background)' }} />
+                  <input type="text" className="input-field" value={selectedItem ? selectedItem.item_name : (selectedGroup ? selectedGroup.item_name : '')} disabled style={{ backgroundColor: 'var(--background)' }} />
                 </div>
                 
                 <div className="input-group">
@@ -642,8 +767,8 @@ const InventoryList = () => {
                 </div>
                 
                 <div className="input-group">
-                  <label className="input-label">Số lượng ({selectedItem.unit})</label>
-                  <input type="number" className="input-field" required max={selectedItem.current_stock} placeholder={`Tối đa: ${selectedItem.current_stock}`} value={exportData.quantity} onChange={e => setExportData({...exportData, quantity: e.target.value})} />
+                  <label className="input-label">Số lượng ({selectedItem ? selectedItem.unit : (selectedGroup ? selectedGroup.unit : '')})</label>
+                  <input type="number" className="input-field" required max={selectedItem ? selectedItem.current_stock : (selectedGroup ? selectedGroup.total_stock : 0)} placeholder={`Tối đa: ${selectedItem ? selectedItem.current_stock : (selectedGroup ? selectedGroup.total_stock : 0)}`} value={exportData.quantity} onChange={e => setExportData({...exportData, quantity: e.target.value})} />
                 </div>
                 
                 <div className="input-group">
