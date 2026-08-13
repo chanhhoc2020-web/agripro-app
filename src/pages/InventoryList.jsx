@@ -281,38 +281,33 @@ const InventoryList = () => {
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: 'var(--background)', borderBottom: '1px solid var(--border)' }}>
+              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600, width: '50px' }}>STT</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Tên vật tư</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Phân loại</th>
-              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Hoạt chất</th>
-              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600, minWidth: '200px' }}>Hướng dẫn sử dụng</th>
+              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600, minWidth: '250px' }}>Thông tin kỹ thuật</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Tồn kho</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Hạn sử dụng</th>
+              {user?.role === 'admin' && <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Giá nhập</th>}
+              {user?.role === 'admin' && <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Giá bán</th>}
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            {displayInventory.map(item => {
+            {displayInventory.map((item, index) => {
               const isLowStock = item.current_stock <= item.min_threshold;
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: 'var(--spacing-4)', textAlign: 'center', fontWeight: 500 }}>{index + 1}</td>
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <div style={{ fontWeight: 500 }}>{item.item_name}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.supplier}</div>
                   </td>
                   <td style={{ padding: 'var(--spacing-4)' }}>{item.category}</td>
-                  <td style={{ padding: 'var(--spacing-4)' }}>
-                    <span className="badge badge-neutral">{item.active_ingredient}</span>
-                  </td>
                   <td style={{ padding: 'var(--spacing-4)', fontSize: '0.85rem' }}>
+                    {item.active_ingredient && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Hoạt chất:</strong> <span className="badge badge-neutral" style={{fontSize: '0.75rem'}}>{item.active_ingredient}</span></div>}
                     {item.purpose && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Mục đích:</strong> {item.purpose}</div>}
                     {item.usage_method && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Cách dùng:</strong> {item.usage_method}</div>}
                     {item.dosage && <div><strong style={{color: 'var(--primary)'}}>Liều lượng:</strong> {item.dosage}</div>}
-                    {user?.role === 'admin' && (item.import_price || item.selling_price) && (
-                      <div style={{marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed var(--border)'}}>
-                        {item.import_price > 0 && <div><strong>Giá nhập:</strong> {item.import_price.toLocaleString('vi-VN')} đ</div>}
-                        {item.selling_price > 0 && <div><strong style={{color: 'var(--danger)'}}>Giá bán:</strong> {item.selling_price.toLocaleString('vi-VN')} đ</div>}
-                      </div>
-                    )}
                   </td>
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -323,6 +318,16 @@ const InventoryList = () => {
                     </div>
                   </td>
                   <td style={{ padding: 'var(--spacing-4)' }}>{item.expiry_date}</td>
+                  {user?.role === 'admin' && (
+                    <td style={{ padding: 'var(--spacing-4)', fontWeight: 500 }}>
+                      {item.import_price ? item.import_price.toLocaleString('vi-VN') + ' đ' : '-'}
+                    </td>
+                  )}
+                  {user?.role === 'admin' && (
+                    <td style={{ padding: 'var(--spacing-4)', fontWeight: 500, color: 'var(--danger)' }}>
+                      {item.selling_price ? item.selling_price.toLocaleString('vi-VN') + ' đ' : '-'}
+                    </td>
+                  )}
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <div className="flex gap-2">
                       <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setShowAdjustModal(true); }}>
