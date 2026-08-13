@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+console.log('App Context Loaded - v2 (Export Feature included)');
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { bannedIngredients as mockBannedIngredients } from '../mockData';
