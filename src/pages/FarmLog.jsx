@@ -192,12 +192,12 @@ const FarmLog = () => {
                 const matchedItem = currentAvailableItems.find(i => i.id === data.matchedId);
                 if (matchedItem) {
                   setFormData(prev => ({ ...prev, inventory_item_id: matchedItem.id }));
-                  alert(`Gemini AI đã nhận diện chính xác: ${matchedItem.item_name}`);
+                  alert(`Đã nhận diện chính xác: ${matchedItem.item_name}`);
                 } else {
-                  alert('Gemini trả về mã không hợp lệ. Vui lòng chọn thủ công.');
+                  alert('AI trả về mã không hợp lệ. Vui lòng chọn thủ công.');
                 }
               } else {
-                alert('Gemini không tìm thấy vật tư nào khớp với ảnh. Vui lòng chọn thủ công.');
+                alert('AI không tìm thấy vật tư nào khớp với ảnh. Vui lòng chọn thủ công.');
               }
             })
             .catch(err => {
