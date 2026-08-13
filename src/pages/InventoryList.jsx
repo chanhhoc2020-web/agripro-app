@@ -31,7 +31,7 @@ const InventoryList = () => {
     unit: 'kg', current_stock: '', min_threshold: '',
     import_price: '', selling_price: '',
     expiry_date: '', supplier: '', phi_days: '0',
-    dosage: '', purpose: '', usage_method: ''
+    dosage: '', purpose: '', usage_method: '', expiry_warning_days: '30'
   });
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -64,7 +64,8 @@ const InventoryList = () => {
       usage_method: item.usage_method || '',
       supplier: item.supplier || '',
       import_price: item.import_price || '',
-      selling_price: item.selling_price || ''
+      selling_price: item.selling_price || '',
+      expiry_warning_days: item.expiry_warning_days || '30'
     });
     setShowSuggestions(false);
   };
@@ -84,7 +85,8 @@ const InventoryList = () => {
       phi_days: item.phi_days || '0',
       dosage: item.dosage || '',
       purpose: item.purpose || '',
-      usage_method: item.usage_method || ''
+      usage_method: item.usage_method || '',
+      expiry_warning_days: item.expiry_warning_days || '30'
     });
     setEditItemId(item.id);
     setIsEditMode(true);
@@ -100,7 +102,8 @@ const InventoryList = () => {
         min_threshold: Number(formData.min_threshold),
         phi_days: Number(formData.phi_days),
         import_price: Number(formData.import_price) || 0,
-        selling_price: Number(formData.selling_price) || 0
+        selling_price: Number(formData.selling_price) || 0,
+        expiry_warning_days: Number(formData.expiry_warning_days) || 30
       };
 
       if (user?.role === 'admin') {
@@ -122,7 +125,7 @@ const InventoryList = () => {
         unit: 'kg', current_stock: '', min_threshold: '',
         import_price: '', selling_price: '',
         expiry_date: '', supplier: '', phi_days: '0',
-        dosage: '', purpose: '', usage_method: ''
+        dosage: '', purpose: '', usage_method: '', expiry_warning_days: '30'
       });
     } catch (err) {
       setErrorMsg(err.message);
@@ -175,6 +178,7 @@ const InventoryList = () => {
       'Giá nhập': i.import_price || 0,
       'Giá bán': i.selling_price || 0,
       'Hạn sử dụng': i.expiry_date,
+      'Cảnh báo cận hạn (Ngày)': i.expiry_warning_days || 30,
       'Nhà cung cấp': i.supplier,
       'Thời gian cách ly PHI': i.phi_days || 0,
       'Liều lượng dùng': i.dosage || '',
@@ -227,6 +231,7 @@ const InventoryList = () => {
               import_price: Number(row['Giá nhập']) || 0,
               selling_price: Number(row['Giá bán']) || 0,
               expiry_date: row['Hạn sử dụng'],
+              expiry_warning_days: Number(row['Cảnh báo cận hạn (Ngày)']) || 30,
               supplier: row['Nhà cung cấp'],
               phi_days: Number(row['Thời gian cách ly PHI']) || 0,
               dosage: row['Liều lượng dùng'] || '',
@@ -254,6 +259,42 @@ const InventoryList = () => {
       (item.category && item.category.toLowerCase().includes(term))
     );
   });
+
+  const sortedDisplayInventory = [...filteredDisplayInventory].sort((a, b) => {
+    if (!a.expiry_date) return 1;
+    if (!b.expiry_date) return -1;
+    return new Date(a.expiry_date) - new Date(b.expiry_date);
+  });
+
+  const openExportModal = (item) => {
+    if (item.expiry_date) {
+      const expiry = new Date(item.expiry_date);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (expiry < today) {
+        alert("🚨 Lô hàng này đã hết hạn sử dụng. Tuyệt đối không được xuất kho!");
+        return;
+      }
+    }
+
+    const olderBatches = inventory.filter(i => 
+      i.item_name === item.item_name &&
+      i.current_stock > 0 &&
+      i.id !== item.id &&
+      i.expiry_date &&
+      new Date(i.expiry_date) < new Date(item.expiry_date)
+    );
+
+    if (olderBatches.length > 0) {
+      const oldest = olderBatches.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))[0];
+      alert(`⚠️ LỖI FIFO: Đang còn ${oldest.current_stock} ${oldest.unit} vật tư "${oldest.item_name}" thuộc Lô hàng cũ (Hạn SD: ${oldest.expiry_date}).\n\nVui lòng xuất lô hàng cũ này trước để tránh tồn đọng hàng hết hạn!`);
+      return;
+    }
+
+    setSelectedItem(item);
+    setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price ? Math.round(item.selling_price) : '', payment_status: 'Đã thanh toán', notes: '' });
+    setShowExportModal(true);
+  };
 
   return (
     <div className="animate-fade-in">
@@ -294,7 +335,7 @@ const InventoryList = () => {
               unit: 'kg', current_stock: '', min_threshold: '',
               import_price: '', selling_price: '',
               expiry_date: '', supplier: '', phi_days: '0',
-              dosage: '', purpose: '', usage_method: ''
+              dosage: '', purpose: '', usage_method: '', expiry_warning_days: '30'
             });
             setShowAddModal(true);
           }}>
@@ -319,7 +360,7 @@ const InventoryList = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredDisplayInventory.map((item, index) => {
+            {sortedDisplayInventory.map((item, index) => {
               const isLowStock = item.current_stock <= item.min_threshold;
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -343,7 +384,37 @@ const InventoryList = () => {
                       {isLowStock && <AlertTriangle size={16} color="var(--danger)" title="Dưới ngưỡng an toàn" />}
                     </div>
                   </td>
-                  <td style={{ padding: 'var(--spacing-4)' }}>{item.expiry_date}</td>
+                  <td style={{ padding: 'var(--spacing-4)' }}>
+                    {(() => {
+                      if (!item.expiry_date) return '-';
+                      const expiry = new Date(item.expiry_date);
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      const diffTime = expiry - today;
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      const warningDays = item.expiry_warning_days || 30;
+
+                      if (diffDays < 0) {
+                        return (
+                          <div style={{ color: 'var(--danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>{item.expiry_date}</span>
+                            <AlertTriangle size={16} />
+                            <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--danger)', color: 'white', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>Đã hết hạn</span>
+                          </div>
+                        );
+                      } else if (diffDays <= warningDays) {
+                        return (
+                          <div style={{ color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>{item.expiry_date}</span>
+                            <AlertTriangle size={16} />
+                            <span style={{ fontSize: '0.75rem', backgroundColor: '#d97706', color: 'white', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>Sắp hết hạn</span>
+                          </div>
+                        );
+                      } else {
+                        return <span>{item.expiry_date}</span>;
+                      }
+                    })()}
+                  </td>
                   {user?.role === 'admin' && (
                     <td style={{ padding: 'var(--spacing-4)', fontWeight: 500 }}>
                       {item.import_price ? item.import_price.toLocaleString('vi-VN') + ' đ' : '-'}
@@ -367,7 +438,7 @@ const InventoryList = () => {
                           <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleEditItem(item)}>
                             <Pencil size={16} title="Chỉnh sửa thông tin" />
                           </button>
-                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price ? Math.round(item.selling_price) : '', payment_status: 'Đã thanh toán', notes: '' }); setShowExportModal(true); }}>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => openExportModal(item)}>
                             <ArrowUpFromLine size={16} title="Xuất kho" />
                           </button>
                         </>
@@ -458,6 +529,10 @@ const InventoryList = () => {
                 <div className="input-group">
                   <label className="input-label">Hạn sử dụng</label>
                   <input type="date" className="input-field" required value={formData.expiry_date} onChange={e => setFormData({...formData, expiry_date: e.target.value})} />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Báo cận hạn (Ngày)</label>
+                  <input type="number" className="input-field" value={formData.expiry_warning_days} onChange={e => setFormData({...formData, expiry_warning_days: e.target.value})} title="Báo trước số ngày để chuẩn bị xử lý hàng cận hạn" />
                 </div>
                 <div className="input-group">
                   <label className="input-label">Nhà cung cấp</label>
