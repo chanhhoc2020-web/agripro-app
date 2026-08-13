@@ -22,6 +22,7 @@ const InventoryList = () => {
   const [formData, setFormData] = useState({
     item_name: '', category: 'Phân bón', active_ingredient: '',
     unit: 'kg', current_stock: '', min_threshold: '',
+    import_price: '', selling_price: '',
     expiry_date: '', supplier: '', phi_days: '0',
     dosage: '', purpose: '', usage_method: ''
   });
@@ -54,7 +55,9 @@ const InventoryList = () => {
       dosage: item.dosage || '',
       purpose: item.purpose || '',
       usage_method: item.usage_method || '',
-      supplier: item.supplier || ''
+      supplier: item.supplier || '',
+      import_price: item.import_price || '',
+      selling_price: item.selling_price || ''
     });
     setShowSuggestions(false);
   };
@@ -66,7 +69,9 @@ const InventoryList = () => {
         ...formData,
         current_stock: Number(formData.current_stock),
         min_threshold: Number(formData.min_threshold),
-        phi_days: Number(formData.phi_days)
+        phi_days: Number(formData.phi_days),
+        import_price: Number(formData.import_price) || 0,
+        selling_price: Number(formData.selling_price) || 0
       };
 
       if (user?.role === 'admin') {
@@ -80,6 +85,7 @@ const InventoryList = () => {
       setFormData({
         item_name: '', category: 'Phân bón', active_ingredient: '',
         unit: 'kg', current_stock: '', min_threshold: '',
+        import_price: '', selling_price: '',
         expiry_date: '', supplier: '', phi_days: '0',
         dosage: '', purpose: '', usage_method: ''
       });
@@ -161,6 +167,12 @@ const InventoryList = () => {
                     {item.purpose && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Mục đích:</strong> {item.purpose}</div>}
                     {item.usage_method && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Cách dùng:</strong> {item.usage_method}</div>}
                     {item.dosage && <div><strong style={{color: 'var(--primary)'}}>Liều lượng:</strong> {item.dosage}</div>}
+                    {user?.role === 'admin' && (item.import_price || item.selling_price) && (
+                      <div style={{marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed var(--border)'}}>
+                        {item.import_price > 0 && <div><strong>Giá nhập:</strong> {item.import_price.toLocaleString('vi-VN')} đ</div>}
+                        {item.selling_price > 0 && <div><strong style={{color: 'var(--danger)'}}>Giá bán:</strong> {item.selling_price.toLocaleString('vi-VN')} đ</div>}
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -177,7 +189,7 @@ const InventoryList = () => {
                         <ArrowDownToLine size={16} title="Nhập thêm" />
                       </button>
                       {user?.role === 'admin' && (
-                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setShowExportModal(true); }}>
+                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price || '', payment_status: 'Đã thanh toán', notes: '' }); setShowExportModal(true); }}>
                           <ArrowUpFromLine size={16} title="Xuất kho" />
                         </button>
                       )}
@@ -245,6 +257,18 @@ const InventoryList = () => {
                   <label className="input-label">Thời gian cách ly PHI (ngày)</label>
                   <input type="number" className="input-field" required value={formData.phi_days} onChange={e => setFormData({...formData, phi_days: e.target.value})} disabled={formData.category !== 'Thuốc BVTV' && formData.category !== 'Phân bón'} />
                 </div>
+                {user?.role === 'admin' && (
+                  <>
+                    <div className="input-group">
+                      <label className="input-label">Giá nhập (VNĐ)</label>
+                      <input type="number" className="input-field" value={formData.import_price} onChange={e => setFormData({...formData, import_price: e.target.value})} placeholder="0" />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Giá bán ra (VNĐ)</label>
+                      <input type="number" className="input-field" value={formData.selling_price} onChange={e => setFormData({...formData, selling_price: e.target.value})} placeholder="0" />
+                    </div>
+                  </>
+                )}
                 <div className="input-group">
                   <label className="input-label">Hạn sử dụng</label>
                   <input type="date" className="input-field" required value={formData.expiry_date} onChange={e => setFormData({...formData, expiry_date: e.target.value})} />
