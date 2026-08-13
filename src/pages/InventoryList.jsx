@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
-const InventoryList = () => दल
+const InventoryList = () => {
   const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user } = useAppContext();
   const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
   const [showAddModal, setShowAddModal] = useState(false);
