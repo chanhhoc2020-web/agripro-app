@@ -336,7 +336,7 @@ const InventoryList = () => {
                           <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleEditItem(item)}>
                             <Pencil size={16} title="Chỉnh sửa thông tin" />
                           </button>
-                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price || '', payment_status: 'Đã thanh toán', notes: '' }); setShowExportModal(true); }}>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price ? Math.round(item.selling_price) : '', payment_status: 'Đã thanh toán', notes: '' }); setShowExportModal(true); }}>
                             <ArrowUpFromLine size={16} title="Xuất kho" />
                           </button>
                         </>
@@ -505,7 +505,7 @@ const InventoryList = () => {
 
                 <div className="input-group">
                   <label className="input-label">Thành tiền (VNĐ)</label>
-                  <input type="text" className="input-field" disabled value={((Number(exportData.quantity) || 0) * (Number(exportData.unit_price) || 0)).toLocaleString('vi-VN')} style={{ backgroundColor: 'var(--background)', fontWeight: 'bold' }} />
+                  <input type="text" className="input-field" disabled value={Math.round((Number(exportData.quantity) || 0) * (Number(exportData.unit_price) || 0)).toLocaleString('vi-VN')} style={{ backgroundColor: 'var(--background)', fontWeight: 'bold' }} />
                 </div>
 
                 <div className="input-group">
