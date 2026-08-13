@@ -9,6 +9,7 @@ const Dashboard = () => {
   const lowStockItems = inventory.filter(i => i.current_stock <= i.min_threshold).length;
   
   if (user?.role === 'farmer') {
+    const farmerLogsCount = farmLogs.filter(log => log.puc_code === user.puc_code).length;
     return (
       <div className="animate-fade-in">
         <h2 style={{ marginBottom: 'var(--spacing-6)' }}>Tổng quan - Nông dân</h2>
@@ -19,7 +20,7 @@ const Dashboard = () => {
             </div>
             <div>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Nhật ký đã ghi</p>
-              <h3 style={{ fontSize: '1.5rem', margin: 0 }}>{farmLogs.length}</h3>
+              <h3 style={{ fontSize: '1.5rem', margin: 0 }}>{farmerLogsCount}</h3>
             </div>
           </div>
         </div>
