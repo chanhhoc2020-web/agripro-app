@@ -16,7 +16,7 @@ import { Sprout } from 'lucide-react';
 
 
 const FarmLog = () => {
-  const { farmLogs, addFarmLog, plantingZones, inventory, user } = useAppContext();
+  const { farmLogs, addFarmLog, plantingZones, inventory, user, users } = useAppContext();
   const [showAddLog, setShowAddLog] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -31,8 +31,10 @@ const FarmLog = () => {
     location: null,
   });
   const [isScanning, setIsScanning] = useState(false);
+  const [adminFilterUser, setAdminFilterUser] = useState(''); // State for admin filter
 
   const activeZones = plantingZones.filter(z => z.status === 'Active');
+  const farmersList = user?.role === 'admin' && typeof users !== 'undefined' ? users.filter(u => u.role === 'farmer') : [];
 
   // Auto-fetch GPS and set default PUC when action is selected
   useEffect(() => {
@@ -369,13 +371,36 @@ const FarmLog = () => {
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-6">
         <h2>Nhật ký Canh tác (FarmLog)</h2>
-        <button className="btn btn-primary btn-large" onClick={() => setShowAddLog(true)} style={{ borderRadius: '50px', boxShadow: 'var(--shadow-md)' }}>
-          <Plus size={20} /> Ghi nhật ký
-        </button>
+        <div className="flex gap-4">
+          {user?.role === 'admin' && farmersList.length > 0 && (
+            <select 
+              className="input-field" 
+              style={{ width: 'auto', padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}
+              value={adminFilterUser}
+              onChange={e => setAdminFilterUser(e.target.value)}
+            >
+              <option value="">Tất cả nông dân</option>
+              {farmersList.map(f => (
+                <option key={f.id} value={f.puc_code}>{f.name} ({f.puc_code})</option>
+              ))}
+            </select>
+          )}
+          <button className="btn btn-primary btn-large" onClick={() => setShowAddLog(true)} style={{ borderRadius: '50px', boxShadow: 'var(--shadow-md)' }}>
+            <Plus size={20} /> Ghi nhật ký
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {farmLogs.slice().reverse().map(log => {
+        {farmLogs
+          .filter(log => {
+            // Nông dân chỉ thấy nhật ký của vùng trồng được gán cho họ
+            if (user?.role === 'farmer') return log.puc_code === user.puc_code;
+            // Admin thì thấy tất cả, nhưng có thể lọc
+            if (user?.role === 'admin' && adminFilterUser) return log.puc_code === adminFilterUser;
+            return true;
+          })
+          .slice().reverse().map(log => {
           const zone = plantingZones.find(z => z.puc_code === log.puc_code);
           const item = inventory.find(i => i.id === log.inventory_item_id);
           const date = new Date(log.timestamp).toLocaleString('vi-VN');
