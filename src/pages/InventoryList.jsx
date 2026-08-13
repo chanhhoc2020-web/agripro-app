@@ -3,12 +3,21 @@ import { useAppContext } from '../context/AppContext';
 import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 const InventoryList = () => {
-  const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user } = useAppContext();
+  const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, users } = useAppContext();
   const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [adjustAmount, setAdjustAmount] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportData, setExportData] = useState({
+    farmer_id: '',
+    quantity: '',
+    unit_price: '',
+    payment_status: 'Đã thanh toán',
+    notes: ''
+  });
+  const farmersList = users ? users.filter(u => u.role === 'farmer') : [];
   
   const [formData, setFormData] = useState({
     item_name: '', category: 'Phân bón', active_ingredient: '',
@@ -92,6 +101,27 @@ const InventoryList = () => {
     }
   };
 
+  const handleExportStock = async (e) => {
+    e.preventDefault();
+    if (selectedItem) {
+      try {
+        await exportInventoryItem({
+          global_inventory_id: selectedItem.id,
+          farmer_id: exportData.farmer_id || null,
+          quantity: Number(exportData.quantity),
+          unit_price: Number(exportData.unit_price) || 0,
+          total_price: (Number(exportData.quantity) * (Number(exportData.unit_price) || 0)),
+          payment_status: exportData.payment_status,
+          notes: exportData.notes
+        });
+        setShowExportModal(false);
+        setExportData({ farmer_id: '', quantity: '', unit_price: '', payment_status: 'Đã thanh toán', notes: '' });
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-4">
@@ -146,6 +176,11 @@ const InventoryList = () => {
                       <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} onClick={() => { setSelectedItem(item); setShowAdjustModal(true); }}>
                         <ArrowDownToLine size={16} title="Nhập thêm" />
                       </button>
+                      {user?.role === 'admin' && (
+                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setShowExportModal(true); }}>
+                          <ArrowUpFromLine size={16} title="Xuất kho" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -257,6 +292,67 @@ const InventoryList = () => {
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowAdjustModal(false)}>Hủy</button>
                 <button type="submit" className="btn btn-primary">Cập nhật</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showExportModal && selectedItem && (
+        <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Lập Phiếu Xuất Kho</h3>
+            </div>
+            <form onSubmit={handleExportStock}>
+              <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-4)' }}>
+                <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="input-label">Tên vật tư xuất</label>
+                  <input type="text" className="input-field" value={selectedItem.item_name} disabled style={{ backgroundColor: 'var(--background)' }} />
+                </div>
+                
+                <div className="input-group">
+                  <label className="input-label">Người nhận (Nông dân HTX)</label>
+                  <select className="input-field" value={exportData.farmer_id} onChange={e => setExportData({...exportData, farmer_id: e.target.value})}>
+                    <option value="">-- Khách lẻ / Người ngoài --</option>
+                    {farmersList.map(f => (
+                      <option key={f.id} value={f.id}>{f.name} ({f.phone})</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="input-group">
+                  <label className="input-label">Số lượng ({selectedItem.unit})</label>
+                  <input type="number" className="input-field" required max={selectedItem.current_stock} placeholder={`Tối đa: ${selectedItem.current_stock}`} value={exportData.quantity} onChange={e => setExportData({...exportData, quantity: e.target.value})} />
+                </div>
+                
+                <div className="input-group">
+                  <label className="input-label">Đơn giá (VNĐ)</label>
+                  <input type="number" className="input-field" required value={exportData.unit_price} onChange={e => setExportData({...exportData, unit_price: e.target.value})} />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Thành tiền (VNĐ)</label>
+                  <input type="text" className="input-field" disabled value={((Number(exportData.quantity) || 0) * (Number(exportData.unit_price) || 0)).toLocaleString('vi-VN')} style={{ backgroundColor: 'var(--background)', fontWeight: 'bold' }} />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Trạng thái thanh toán</label>
+                  <select className="input-field" value={exportData.payment_status} onChange={e => setExportData({...exportData, payment_status: e.target.value})}>
+                    <option value="Đã thanh toán">Đã thanh toán (Tiền mặt/CK)</option>
+                    <option value="Ghi nợ">Ghi nợ</option>
+                    <option value="Cấp phát miễn phí">Cấp phát miễn phí</option>
+                  </select>
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Ghi chú (Lý do / Mục đích)</label>
+                  <input type="text" className="input-field" value={exportData.notes} onChange={e => setExportData({...exportData, notes: e.target.value})} placeholder="VD: Nông dân mua trả chậm..." />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setShowExportModal(false)}>Hủy</button>
+                <button type="submit" className="btn btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }}>Xác nhận Xuất Kho</button>
               </div>
             </form>
           </div>

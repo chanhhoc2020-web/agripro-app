@@ -152,6 +152,57 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const exportInventoryItem = async (exportData) => {
+    // 1. Fetch global item
+    const globalItem = inventory.find(i => i.id === exportData.global_inventory_id);
+    if (!globalItem) throw new Error("Vật tư không tồn tại trong kho HTX!");
+    if (globalItem.current_stock < exportData.quantity) {
+      throw new Error("Số lượng xuất vượt quá tồn kho hiện tại!");
+    }
+
+    // 2. Trừ tồn kho Admin
+    await updateStock(globalItem.id, -exportData.quantity);
+
+    // 3. Ghi log xuất kho
+    const exportRecord = {
+      ...exportData,
+      item_name: globalItem.item_name,
+      timestamp: new Date().toISOString()
+    };
+    await addDoc(collection(db, 'inventory_exports'), exportRecord);
+
+    // 4. Cộng vào kho cá nhân của Nông dân (nếu có chọn nông dân)
+    if (exportData.farmer_id) {
+      // Tìm xem nông dân đã có mặt hàng này trong kho cá nhân chưa (so khớp tên)
+      const existingFarmerItem = farmerInventory.find(
+        i => i.farmer_id === exportData.farmer_id && i.item_name === globalItem.item_name
+      );
+
+      if (existingFarmerItem) {
+        // Cập nhật tồn kho
+        await updateFarmerStock(existingFarmerItem.id, exportData.quantity);
+      } else {
+        // Tạo mới vật tư trong kho cá nhân
+        const newFarmerItem = {
+          farmer_id: exportData.farmer_id,
+          item_name: globalItem.item_name,
+          category: globalItem.category || '',
+          active_ingredient: globalItem.active_ingredient || '',
+          unit: globalItem.unit || '',
+          current_stock: exportData.quantity,
+          min_threshold: 0,
+          expiry_date: globalItem.expiry_date || '',
+          supplier: globalItem.supplier || '',
+          phi_days: globalItem.phi_days || 0,
+          dosage: globalItem.dosage || '',
+          purpose: globalItem.purpose || '',
+          usage_method: globalItem.usage_method || ''
+        };
+        await addDoc(collection(db, 'farmer_inventory'), newFarmerItem);
+      }
+    }
+  };
+
   // Farm Log functions
   const addFarmLog = async (log) => {
     // 1. If using inventory item (now points to farmer_inventory)
@@ -213,7 +264,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       user, login, logout,
       plantingZones, addZone, updateZone, deleteZone,
-      inventory, addInventoryItem, updateStock,
+      inventory, addInventoryItem, updateStock, exportInventoryItem,
       farmerInventory, addFarmerInventoryItem, updateFarmerStock,
       farmLogs, addFarmLog,
       batches, addBatch,
