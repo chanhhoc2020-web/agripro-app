@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const InventoryList = () => {
-  const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, users } = useAppContext();
+  const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, updateInventoryItem, users } = useAppContext();
   const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editItemId, setEditItemId] = useState(null);
+  const fileInputRef = useRef(null);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [adjustAmount, setAdjustAmount] = useState('');
@@ -62,6 +66,28 @@ const InventoryList = () => {
     setShowSuggestions(false);
   };
 
+  const handleEditItem = (item) => {
+    setFormData({
+      item_name: item.item_name || '',
+      category: item.category || 'Phân bón',
+      active_ingredient: item.active_ingredient || '',
+      unit: item.unit || 'kg',
+      current_stock: item.current_stock || '',
+      min_threshold: item.min_threshold || '',
+      import_price: item.import_price || '',
+      selling_price: item.selling_price || '',
+      expiry_date: item.expiry_date || '',
+      supplier: item.supplier || '',
+      phi_days: item.phi_days || '0',
+      dosage: item.dosage || '',
+      purpose: item.purpose || '',
+      usage_method: item.usage_method || ''
+    });
+    setEditItemId(item.id);
+    setIsEditMode(true);
+    setShowAddModal(true);
+  };
+
   const handleAddItem = (e) => {
     e.preventDefault();
     try {
@@ -75,12 +101,18 @@ const InventoryList = () => {
       };
 
       if (user?.role === 'admin') {
-        addInventoryItem(newItem);
+        if (isEditMode) {
+          await updateInventoryItem(editItemId, newItem);
+        } else {
+          await addInventoryItem(newItem);
+        }
       } else {
-        addFarmerInventoryItem({ ...newItem, farmer_id: user.id });
+        await addFarmerInventoryItem({ ...newItem, farmer_id: user.id });
       }
 
       setShowAddModal(false);
+      setIsEditMode(false);
+      setEditItemId(null);
       setErrorMsg('');
       setFormData({
         item_name: '', category: 'Phân bón', active_ingredient: '',
@@ -128,13 +160,104 @@ const InventoryList = () => {
     }
   };
 
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(inventory.map(i => ({
+      'ID (Không sửa)': i.id,
+      'Tên vật tư': i.item_name,
+      'Phân loại': i.category,
+      'Hoạt chất chính': i.active_ingredient,
+      'Số lượng': i.current_stock,
+      'Đơn vị': i.unit,
+      'Ngưỡng báo động': i.min_threshold,
+      'Giá nhập': i.import_price || 0,
+      'Giá bán': i.selling_price || 0,
+      'Hạn sử dụng': i.expiry_date,
+      'Nhà cung cấp': i.supplier,
+      'Thời gian cách ly PHI': i.phi_days || 0,
+      'Liều lượng dùng': i.dosage || '',
+      'Mục đích sử dụng': i.purpose || '',
+      'Cách sử dụng': i.usage_method || ''
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Kho Vật Tư");
+    XLSX.writeFile(wb, "Kho_Vat_Tu.xlsx");
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        let count = 0;
+        for (const row of data) {
+          const id = row['ID (Không sửa)'];
+          if (id) {
+            await updateInventoryItem(id, {
+              item_name: row['Tên vật tư'],
+              category: row['Phân loại'],
+              active_ingredient: row['Hoạt chất chính'],
+              current_stock: Number(row['Số lượng']),
+              unit: row['Đơn vị'],
+              min_threshold: Number(row['Ngưỡng báo động']),
+              import_price: Number(row['Giá nhập']) || 0,
+              selling_price: Number(row['Giá bán']) || 0,
+              expiry_date: row['Hạn sử dụng'],
+              supplier: row['Nhà cung cấp'],
+              phi_days: Number(row['Thời gian cách ly PHI']) || 0,
+              dosage: row['Liều lượng dùng'] || '',
+              purpose: row['Mục đích sử dụng'] || '',
+              usage_method: row['Cách sử dụng'] || ''
+            });
+            count++;
+          }
+        }
+        alert(`Đã cập nhật thành công ${count} mặt hàng từ file Excel!`);
+        e.target.value = null;
+      } catch (err) {
+        alert("Lỗi khi đọc file Excel: " + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-4">
         <h2>{user?.role === 'admin' ? 'Quản lý Kho Vật Tư (Hệ thống)' : 'Kho Vật Tư Cá Nhân'}</h2>
-        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-          <Plus size={18} /> Nhập lô mới
-        </button>
+        <div className="flex gap-2">
+          {user?.role === 'admin' && (
+            <>
+              <button className="btn btn-outline" onClick={exportToExcel} style={{ borderColor: 'var(--success)', color: 'var(--success)' }}>
+                <Download size={18} /> Xuất Excel
+              </button>
+              <button className="btn btn-outline" onClick={() => fileInputRef.current.click()} style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>
+                <Upload size={18} /> Tải lên Excel
+              </button>
+              <input type="file" accept=".xlsx, .xls" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
+            </>
+          )}
+          <button className="btn btn-primary" onClick={() => {
+            setIsEditMode(false);
+            setEditItemId(null);
+            setFormData({
+              item_name: '', category: 'Phân bón', active_ingredient: '',
+              unit: 'kg', current_stock: '', min_threshold: '',
+              import_price: '', selling_price: '',
+              expiry_date: '', supplier: '', phi_days: '0',
+              dosage: '', purpose: '', usage_method: ''
+            });
+            setShowAddModal(true);
+          }}>
+            <Plus size={18} /> Nhập lô mới
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -189,9 +312,14 @@ const InventoryList = () => {
                         <ArrowDownToLine size={16} title="Nhập thêm" />
                       </button>
                       {user?.role === 'admin' && (
-                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price || '', payment_status: 'Đã thanh toán', notes: '' }); setShowExportModal(true); }}>
-                          <ArrowUpFromLine size={16} title="Xuất kho" />
-                        </button>
+                        <>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleEditItem(item)}>
+                            <Pencil size={16} title="Chỉnh sửa thông tin" />
+                          </button>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setSelectedItem(item); setExportData({ farmer_id: '', quantity: '', unit_price: item.selling_price || '', payment_status: 'Đã thanh toán', notes: '' }); setShowExportModal(true); }}>
+                            <ArrowUpFromLine size={16} title="Xuất kho" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -206,7 +334,7 @@ const InventoryList = () => {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Nhập Vật Tư Mới</h3>
+              <h3>{isEditMode ? 'Sửa Thông Tin Vật Tư' : 'Nhập Vật Tư Mới'}</h3>
             </div>
             <form onSubmit={handleAddItem}>
               <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-4)' }}>

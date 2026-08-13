@@ -133,6 +133,18 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const updateInventoryItem = async (id, updatedData) => {
+    if (updatedData.active_ingredient) {
+      const isBanned = bannedIngredients.some(b => 
+        updatedData.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
+      );
+      if (isBanned) {
+        throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
+      }
+    }
+    await updateDoc(doc(db, 'inventory', id), updatedData);
+  };
+
   const addFarmerInventoryItem = async (item) => {
     // Check banned ingredients against the new item (which should be derived from global)
     const isBanned = bannedIngredients.some(b => 
@@ -265,7 +277,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       user, login, logout,
       plantingZones, addZone, updateZone, deleteZone,
-      inventory, addInventoryItem, updateStock, exportInventoryItem,
+      inventory, addInventoryItem, updateStock, exportInventoryItem, updateInventoryItem,
       farmerInventory, addFarmerInventoryItem, updateFarmerStock,
       farmLogs, addFarmLog,
       batches, addBatch,
