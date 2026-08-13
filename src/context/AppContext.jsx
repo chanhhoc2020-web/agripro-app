@@ -11,6 +11,7 @@ export const useAppContext = () => useContext(AppContext);
 export const AppProvider = ({ children }) => {
   const [plantingZones, setPlantingZones] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [inventoryLogs, setInventoryLogs] = useState([]);
   const [farmerInventory, setFarmerInventory] = useState([]);
   const [farmLogs, setFarmLogs] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -52,6 +53,9 @@ export const AppProvider = ({ children }) => {
     const unsubFarmerInventory = onSnapshot(collection(db, 'farmer_inventory'), (snapshot) => {
       setFarmerInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+    const unsubInventoryLogs = onSnapshot(collection(db, 'inventory_logs'), (snapshot) => {
+      setInventoryLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
     return () => {
       unsubZones();
@@ -60,6 +64,7 @@ export const AppProvider = ({ children }) => {
       unsubBatches();
       unsubUsers();
       unsubFarmerInventory();
+      unsubInventoryLogs();
     };
   }, []);
 
@@ -114,6 +119,23 @@ export const AppProvider = ({ children }) => {
   };
 
   // Inventory functions
+  const logInventoryAction = async (inventory_id, action_type, quantity_change, previous_stock, new_stock, notes) => {
+    try {
+      await addDoc(collection(db, 'inventory_logs'), {
+        inventory_id,
+        action_type,
+        quantity_change,
+        previous_stock,
+        new_stock,
+        notes: notes || '',
+        timestamp: new Date().toISOString(),
+        user_name: user?.name || 'Admin'
+      });
+    } catch (err) {
+      console.error("Failed to log inventory action", err);
+    }
+  };
+
   const addInventoryItem = async (item) => {
     const isBanned = bannedIngredients.some(b => 
       item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
@@ -121,7 +143,8 @@ export const AppProvider = ({ children }) => {
     if (isBanned) {
       throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
     }
-    await addDoc(collection(db, 'inventory'), item);
+    const docRef = await addDoc(collection(db, 'inventory'), item);
+    await logInventoryAction(docRef.id, 'Nhập mới', item.current_stock, 0, item.current_stock, 'Khởi tạo lô mới');
   };
 
   const updateStock = async (id, quantityChange) => {
@@ -130,10 +153,12 @@ export const AppProvider = ({ children }) => {
       await updateDoc(doc(db, 'inventory', id), {
         current_stock: item.current_stock + quantityChange
       });
+      await logInventoryAction(id, quantityChange > 0 ? 'Nhập thêm' : 'Điều chỉnh', quantityChange, item.current_stock, item.current_stock + quantityChange, '');
     }
   };
 
   const updateInventoryItem = async (id, updatedData) => {
+    const item = inventory.find(i => i.id === id);
     if (updatedData.active_ingredient) {
       const isBanned = bannedIngredients.some(b => 
         updatedData.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
@@ -143,6 +168,11 @@ export const AppProvider = ({ children }) => {
       }
     }
     await updateDoc(doc(db, 'inventory', id), updatedData);
+    
+    if (item && updatedData.current_stock !== undefined && updatedData.current_stock !== item.current_stock) {
+      const diff = updatedData.current_stock - item.current_stock;
+      await logInventoryAction(id, 'Điều chỉnh (Sửa/Excel)', diff, item.current_stock, updatedData.current_stock, 'Cập nhật thông tin');
+    }
   };
 
   const addFarmerInventoryItem = async (item) => {
@@ -175,6 +205,8 @@ export const AppProvider = ({ children }) => {
 
     // 2. Trừ tồn kho Admin
     await updateStock(globalItem.id, -exportData.quantity);
+    
+    await logInventoryAction(globalItem.id, 'Xuất kho', -exportData.quantity, globalItem.current_stock, globalItem.current_stock - exportData.quantity, `Xuất cho: ${exportData.farmer_id ? 'Nông dân ID '+exportData.farmer_id : 'Khách lẻ'}. ${exportData.notes}`);
 
     // 3. Ghi log xuất kho
     const exportRecord = {
@@ -277,7 +309,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       user, login, logout,
       plantingZones, addZone, updateZone, deleteZone,
-      inventory, addInventoryItem, updateStock, exportInventoryItem, updateInventoryItem,
+      inventory, inventoryLogs, addInventoryItem, updateStock, exportInventoryItem, updateInventoryItem,
       farmerInventory, addFarmerInventoryItem, updateFarmerStock,
       farmLogs, addFarmLog,
       batches, addBatch,

@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload } from 'lucide-react';
+import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download, Upload, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const InventoryList = () => {
-  const { inventory, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, updateInventoryItem, users } = useAppContext();
+  const { inventory, inventoryLogs, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, updateInventoryItem, users } = useAppContext();
   const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editItemId, setEditItemId] = useState(null);
   const fileInputRef = useRef(null);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [adjustAmount, setAdjustAmount] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -183,6 +185,21 @@ const InventoryList = () => {
     XLSX.writeFile(wb, "Kho_Vat_Tu.xlsx");
   };
 
+  const exportHistoryToExcel = (item, logs) => {
+    const ws = XLSX.utils.json_to_sheet(logs.map(l => ({
+      'Ngày giờ': new Date(l.timestamp).toLocaleString('vi-VN'),
+      'Loại hành động': l.action_type,
+      'Biến động': (l.quantity_change > 0 ? '+' : '') + l.quantity_change,
+      'Tồn kho trước': l.previous_stock,
+      'Tồn kho sau': l.new_stock,
+      'Người thao tác': l.user_name,
+      'Ghi chú': l.notes
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Thẻ Kho");
+    XLSX.writeFile(wb, `The_Kho_${item.item_name}.xlsx`);
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -313,6 +330,9 @@ const InventoryList = () => {
                       </button>
                       {user?.role === 'admin' && (
                         <>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--primary)', borderColor: 'var(--primary)' }} onClick={() => { setSelectedHistoryItem(item); setShowHistoryModal(true); }}>
+                            <History size={16} title="Xem Thẻ kho" />
+                          </button>
                           <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleEditItem(item)}>
                             <Pencil size={16} title="Chỉnh sửa thông tin" />
                           </button>
@@ -507,6 +527,56 @@ const InventoryList = () => {
                 <button type="submit" className="btn btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }}>Xác nhận Xuất Kho</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showHistoryModal && selectedHistoryItem && (
+        <div className="modal-overlay" onClick={() => setShowHistoryModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>Thẻ Kho: {selectedHistoryItem.item_name}</h3>
+              <button className="btn btn-outline" style={{ borderColor: 'var(--success)', color: 'var(--success)', padding: '0.25rem 0.5rem' }} onClick={() => exportHistoryToExcel(selectedHistoryItem, inventoryLogs.filter(l => l.inventory_id === selectedHistoryItem.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)))}>
+                <Download size={16} style={{marginRight: '4px'}}/> Xuất Excel Thẻ Kho
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--background)' }}>
+                    <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Thời gian</th>
+                    <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Hành động</th>
+                    <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Biến động</th>
+                    <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Tồn cuối</th>
+                    <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryLogs.filter(l => l.inventory_id === selectedHistoryItem.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((log, idx) => (
+                    <tr key={idx}>
+                      <td style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>{new Date(log.timestamp).toLocaleString('vi-VN')}</td>
+                      <td style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}><span className="badge badge-neutral">{log.action_type}</span></td>
+                      <td style={{ padding: '8px', borderBottom: '1px solid var(--border)', color: log.quantity_change > 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>
+                        {log.quantity_change > 0 ? '+' : ''}{log.quantity_change}
+                      </td>
+                      <td style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>{log.new_stock} {selectedHistoryItem.unit}</td>
+                      <td style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{fontSize: '0.8rem'}}>{log.notes}</div>
+                        <div style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Bởi: {log.user_name}</div>
+                      </td>
+                    </tr>
+                  ))}
+                  {inventoryLogs.filter(l => l.inventory_id === selectedHistoryItem.id).length === 0 && (
+                    <tr>
+                      <td colSpan="5" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>Chưa có lịch sử nhập xuất nào được ghi nhận.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={() => setShowHistoryModal(false)}>Đóng</button>
+            </div>
           </div>
         </div>
       )}
