@@ -66,6 +66,7 @@ const InventoryList = () => {
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Tên vật tư</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Phân loại</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Hoạt chất</th>
+              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600, minWidth: '200px' }}>Hướng dẫn sử dụng</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Tồn kho</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Hạn sử dụng</th>
               {user?.role === 'admin' && <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Thao tác</th>}
@@ -83,6 +84,11 @@ const InventoryList = () => {
                   <td style={{ padding: 'var(--spacing-4)' }}>{item.category}</td>
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <span className="badge badge-neutral">{item.active_ingredient}</span>
+                  </td>
+                  <td style={{ padding: 'var(--spacing-4)', fontSize: '0.85rem' }}>
+                    {item.purpose && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Mục đích:</strong> {item.purpose}</div>}
+                    {item.usage_method && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Cách dùng:</strong> {item.usage_method}</div>}
+                    {item.dosage && <div><strong style={{color: 'var(--primary)'}}>Liều lượng:</strong> {item.dosage}</div>}
                   </td>
                   <td style={{ padding: 'var(--spacing-4)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
