@@ -203,15 +203,8 @@ const FarmLog = () => {
               if (data.matchedId) {
                 const matchedGlobalItem = globalAvailableItems.find(i => i.id === data.matchedId);
                 if (matchedGlobalItem) {
-                  // Check if farmer has this in their personal inventory
-                  const personalItem = myFarmerInventory.find(i => i.item_name === matchedGlobalItem.item_name);
-                  if (personalItem) {
-                    setFormData(prev => ({ ...prev, inventory_item_id: personalItem.id, item_name_text: '' }));
-                    alert(`Đã nhận diện chính xác: ${matchedGlobalItem.item_name} (Có sẵn trong kho cá nhân)`);
-                  } else {
-                    setFormData(prev => ({ ...prev, inventory_item_id: '', item_name_text: matchedGlobalItem.item_name }));
-                    alert(`Đã nhận diện: ${matchedGlobalItem.item_name}. Bạn chưa nhập lô hàng này vào Kho cá nhân nên hệ thống chỉ ghi lại tên.`);
-                  }
+                  setFormData(prev => ({ ...prev, inventory_item_id: matchedGlobalItem.id, item_name_text: '' }));
+                  alert(`Đã nhận diện chính xác: ${matchedGlobalItem.item_name} (Thuộc kho Admin)`);
                 } else {
                   alert('AI trả về mã không hợp lệ. Vui lòng chọn thủ công.');
                 }
@@ -289,8 +282,16 @@ const FarmLog = () => {
     const needsInventory = ['Bón phân', 'Phun thuốc'].includes(selectedAction.name);
     const filterCategory = selectedAction.name === 'Bón phân' ? 'Phân bón' : (selectedAction.name === 'Phun thuốc' ? 'Thuốc BVTV' : null);
     
-    // Nông dân chỉ chọn từ kho cá nhân của họ
-    const availableItems = filterCategory ? farmerInventory.filter(i => i.farmer_id === user?.id && i.category === filterCategory) : [];
+    // Kết hợp kho Admin và những vật tư tự tạo trong kho cá nhân
+    const globalItems = filterCategory ? inventory.filter(i => i.category === filterCategory) : [];
+    const personalItems = filterCategory ? farmerInventory.filter(i => i.farmer_id === user?.id && i.category === filterCategory) : [];
+    
+    const availableItems = [...globalItems];
+    personalItems.forEach(pi => {
+      if (!globalItems.some(gi => gi.item_name === pi.item_name)) {
+         availableItems.push(pi);
+      }
+    });
     const selectedItemDetail = availableItems.find(i => i.id === formData.inventory_item_id);
     const unitLabel = selectedItemDetail ? `(${selectedItemDetail.unit})` : (formData.item_name_text ? '(kg/lít)' : '');
 
@@ -360,7 +361,7 @@ const FarmLog = () => {
               <>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                    Vật tư (Kho cá nhân)
+                    Vật tư (Kho HTX & Cá nhân)
                     {isScanning && <span style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>Đang quét AI...</span>}
                   </label>
                   <select 
@@ -369,9 +370,9 @@ const FarmLog = () => {
                     value={formData.inventory_item_id} 
                     onChange={e => setFormData({...formData, inventory_item_id: e.target.value, item_name_text: ''})}
                   >
-                    <option value="">-- Chọn từ Kho Cá Nhân --</option>
+                    <option value="">-- Chọn từ Danh sách --</option>
                     {availableItems.map(item => (
-                      <option key={item.id} value={item.id}>{item.item_name} (Tồn: {item.current_stock} {item.unit})</option>
+                      <option key={item.id} value={item.id}>{item.item_name} {item.current_stock !== undefined ? `(Tồn: ${item.current_stock} ${item.unit})` : ''}</option>
                     ))}
                   </select>
                   
@@ -446,7 +447,7 @@ const FarmLog = () => {
           })
           .slice().reverse().map(log => {
           const zone = plantingZones.find(z => z.puc_code === log.puc_code);
-          const fItem = farmerInventory.find(i => i.id === log.inventory_item_id);
+          const fItem = inventory.find(i => i.id === log.inventory_item_id) || farmerInventory.find(i => i.id === log.inventory_item_id);
           const itemNameDisplay = fItem ? fItem.item_name : (log.item_name_text || log.inventory_item_id);
           const date = new Date(log.timestamp).toLocaleString('vi-VN');
           

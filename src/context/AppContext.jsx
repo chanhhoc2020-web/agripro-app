@@ -230,12 +230,13 @@ export const AppProvider = ({ children }) => {
 
   // Farm Log functions
   const addFarmLog = async (log) => {
-    // 1. If using inventory item (now points to farmer_inventory)
+    // 1. If using inventory item (now points to global or farmer_inventory)
     if (log.inventory_item_id) {
-      const fItem = farmerInventory.find(i => i.id === log.inventory_item_id);
+      let fItem = farmerInventory.find(i => i.id === log.inventory_item_id);
       if (fItem) {
         await updateFarmerStock(fItem.id, -log.quantity_used);
       }
+      // Note: We do not deduct from global inventory here because the farmer already exported it to use.
     }
 
     // 2. If harvesting, check PHI
@@ -251,7 +252,7 @@ export const AppProvider = ({ children }) => {
         let itemName = pLog.item_name_text || 'Thuốc không xác định';
         
         if (pLog.inventory_item_id) {
-          const fItem = farmerInventory.find(i => i.id === pLog.inventory_item_id);
+          let fItem = inventory.find(i => i.id === pLog.inventory_item_id) || farmerInventory.find(i => i.id === pLog.inventory_item_id);
           if (fItem) {
             phiDays = fItem.phi_days || 0;
             itemName = fItem.item_name;
