@@ -7,7 +7,7 @@ import { MapPin, Sprout, ShieldCheck, CheckCircle2 } from 'lucide-react';
 const TraceabilityPage = () => {
   const { hash } = useParams();
   const [searchParams] = useSearchParams();
-  const { plantingZones, farmLogs, inventory, batches, addBatch } = useAppContext();
+  const { plantingZones, farmLogs, inventory, batches, addBatch, farmerInventory } = useAppContext();
 
   // Retrieve data from URL query params (if scanned by phone) or local storage
   const urlPuc = searchParams.get('puc');
@@ -132,6 +132,39 @@ const TraceabilityPage = () => {
               className="btn btn-primary" 
               style={{ width: '100%', marginTop: 'var(--spacing-2)' }}
               onClick={() => {
+                // Check PHI
+                const pesticideLogs = logs.filter(l => {
+                  const logTime = new Date(l.timestamp).getTime();
+                  const start = new Date(formData.startDate).getTime();
+                  const end = new Date(formData.harvestDate).getTime() + 86400000;
+                  return l.action_type === 'Phun thuốc' && logTime >= start && logTime <= end;
+                });
+                
+                let hasPhiWarning = false;
+                let warningMessage = '';
+
+                for (let log of pesticideLogs) {
+                  if (log.inventory_item_id) {
+                    const item = farmerInventory.find(i => i.id === log.inventory_item_id) || inventory.find(i => i.id === log.inventory_item_id);
+                    if (item && item.phi_days > 0) {
+                      const safeDate = new Date(log.timestamp);
+                      safeDate.setDate(safeDate.getDate() + Number(item.phi_days));
+                      const harvestDateObj = new Date(formData.harvestDate);
+                      harvestDateObj.setHours(23, 59, 59, 999);
+                      
+                      if (safeDate > harvestDateObj) {
+                        hasPhiWarning = true;
+                        warningMessage = `⚠️ CẢNH BÁO AN TOÀN PHI!\n\nLô hàng này đã sử dụng thuốc "${item.item_name}" vào ngày ${new Date(log.timestamp).toLocaleDateString('vi-VN')} với thời gian cách ly là ${item.phi_days} ngày.\nNgày an toàn thu hoạch phải từ ${safeDate.toLocaleDateString('vi-VN')} trở đi, nhưng ngày thu hoạch khai báo là ${harvestDateObj.toLocaleDateString('vi-VN')}.\n\nNông sản CHƯA ĐẠT CHUẨN AN TOÀN! Bạn có chắc chắn muốn phát hành mã QR không hợp lệ này không?`;
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                if (hasPhiWarning) {
+                  if (!window.confirm(warningMessage)) return;
+                }
+
                 const newHash = 'BATCH-' + Date.now().toString(36).toUpperCase();
                 setGeneratedHash(newHash);
                 addBatch({

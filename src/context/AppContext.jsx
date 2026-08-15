@@ -137,12 +137,6 @@ export const AppProvider = ({ children }) => {
   };
 
   const addInventoryItem = async (item) => {
-    const isBanned = bannedIngredients.some(b => 
-      item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
-    );
-    if (isBanned) {
-      throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
-    }
     const docRef = await addDoc(collection(db, 'inventory'), item);
     await logInventoryAction(docRef.id, 'Nhập mới', item.current_stock, 0, item.current_stock, 'Khởi tạo lô mới');
   };
@@ -159,14 +153,6 @@ export const AppProvider = ({ children }) => {
 
   const updateInventoryItem = async (id, updatedData) => {
     const item = inventory.find(i => i.id === id);
-    if (updatedData.active_ingredient) {
-      const isBanned = bannedIngredients.some(b => 
-        updatedData.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
-      );
-      if (isBanned) {
-        throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
-      }
-    }
     await updateDoc(doc(db, 'inventory', id), updatedData);
     
     if (item && updatedData.current_stock !== undefined && updatedData.current_stock !== item.current_stock) {
@@ -176,13 +162,6 @@ export const AppProvider = ({ children }) => {
   };
 
   const addFarmerInventoryItem = async (item) => {
-    // Check banned ingredients against the new item (which should be derived from global)
-    const isBanned = bannedIngredients.some(b => 
-      item.active_ingredient && item.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
-    );
-    if (isBanned) {
-      throw new Error(`CẢNH BÁO: Hoạt chất có trong danh mục CẤM sử dụng theo quy định hiện hành. Hành động bị hủy!`);
-    }
     await addDoc(collection(db, 'farmer_inventory'), item);
   };
 
@@ -254,12 +233,6 @@ export const AppProvider = ({ children }) => {
     if (log.inventory_item_id) {
       const fItem = farmerInventory.find(i => i.id === log.inventory_item_id);
       if (fItem) {
-        const isBanned = bannedIngredients.some(b => 
-          fItem.active_ingredient && fItem.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())
-        );
-        if (isBanned) {
-          throw new Error(`CẢNH BÁO: Thuốc này chứa hoạt chất cấm. Không thể lưu nhật ký!`);
-        }
         await updateFarmerStock(fItem.id, -log.quantity_used);
       }
     }

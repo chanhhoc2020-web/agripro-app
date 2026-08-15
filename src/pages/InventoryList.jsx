@@ -4,7 +4,7 @@ import { Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Pencil, Download
 import * as XLSX from 'xlsx';
 
 const InventoryList = () => {
-  const { inventory, inventoryLogs, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, updateInventoryItem, users } = useAppContext();
+  const { inventory, inventoryLogs, addInventoryItem, updateStock, farmerInventory, addFarmerInventoryItem, updateFarmerStock, user, exportInventoryItem, updateInventoryItem, users, bannedIngredients } = useAppContext();
   const displayInventory = user?.role === 'admin' ? inventory : farmerInventory.filter(i => i.farmer_id === user?.id);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -488,8 +488,19 @@ const InventoryList = () => {
                     </td>
                     <td style={{ padding: 'var(--spacing-4)' }}>{group.category}</td>
                     <td style={{ padding: 'var(--spacing-4)', fontSize: '0.85rem' }}>
-                      {group.active_ingredient && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Hoạt chất:</strong> <span className="badge badge-neutral" style={{fontSize: '0.75rem'}}>{group.active_ingredient}</span></div>}
+                      {group.active_ingredient && (
+                        <div style={{marginBottom: '4px'}}>
+                          <strong style={{color: 'var(--primary)'}}>Hoạt chất:</strong> 
+                          <span className="badge badge-neutral" style={{fontSize: '0.75rem', marginLeft: '4px'}}>{group.active_ingredient}</span>
+                          {bannedIngredients.some(b => group.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())) && (
+                            <span style={{ fontSize: '0.7rem', backgroundColor: 'var(--danger)', color: 'white', padding: '2px 4px', borderRadius: '4px', marginLeft: '4px', fontWeight: 600 }}>
+                              ☠️ CẤM
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {group.purpose && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Mục đích:</strong> {group.purpose}</div>}
+                      {group.phi_days > 0 && <div style={{marginBottom: '4px'}}><strong style={{color: 'var(--primary)'}}>Cách ly (PHI):</strong> {group.phi_days} ngày</div>}
                     </td>
                     <td style={{ padding: 'var(--spacing-4)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -653,6 +664,11 @@ const InventoryList = () => {
                 <div className="input-group">
                   <label className="input-label">Hoạt chất chính</label>
                   <input type="text" className="input-field" required value={formData.active_ingredient} onChange={e => setFormData({...formData, active_ingredient: e.target.value})} />
+                  {formData.active_ingredient && bannedIngredients.some(b => formData.active_ingredient.toLowerCase().includes(b.ingredient_name.toLowerCase())) && (
+                    <span style={{ fontSize: '0.85rem', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                      <AlertTriangle size={14} /> Cảnh báo: Hoạt chất này thuộc danh mục cấm sử dụng!
+                    </span>
+                  )}
                 </div>
                 <div className="input-group">
                   <label className="input-label">Số lượng</label>
@@ -794,6 +810,14 @@ const InventoryList = () => {
                   <label className="input-label">Ghi chú (Lý do / Mục đích)</label>
                   <input type="text" className="input-field" value={exportData.notes} onChange={e => setExportData({...exportData, notes: e.target.value})} placeholder="VD: Nông dân mua trả chậm..." />
                 </div>
+                {((selectedItem && selectedItem.phi_days > 0) || (selectedGroup && selectedGroup.phi_days > 0)) && (
+                  <div style={{ gridColumn: '1 / -1', backgroundColor: 'rgba(217, 119, 6, 0.1)', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #d97706', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ fontSize: '0.875rem', color: '#b45309' }}>
+                      <strong>LƯU Ý BẮT BUỘC:</strong> Thuốc này có thời gian cách ly là <strong>{selectedItem ? selectedItem.phi_days : selectedGroup.phi_days} ngày</strong>. Nếu sử dụng hôm nay, tuyệt đối KHÔNG được thu hoạch nông sản trước ngày <strong>{(() => { const d = new Date(); d.setDate(d.getDate() + (selectedItem ? selectedItem.phi_days : selectedGroup.phi_days)); return d.toLocaleDateString('vi-VN'); })()}</strong>.
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowExportModal(false)}>Hủy</button>
