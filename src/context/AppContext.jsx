@@ -20,6 +20,7 @@ export const AppProvider = ({ children }) => {
     const saved = localStorage.getItem('agripro_user');
     return saved ? JSON.parse(saved) : null;
   });
+  const [appConfig, setAppConfig] = useState({ strict_mode: false });
   
   // We keep banned ingredients hardcoded for now, or fetch if needed
   const bannedIngredients = mockBannedIngredients;
@@ -56,6 +57,11 @@ export const AppProvider = ({ children }) => {
     const unsubInventoryLogs = onSnapshot(collection(db, 'inventory_logs'), (snapshot) => {
       setInventoryLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'app_config'), (snapshot) => {
+      if (snapshot.exists()) {
+        setAppConfig(snapshot.data());
+      }
+    });
 
     return () => {
       unsubZones();
@@ -65,8 +71,13 @@ export const AppProvider = ({ children }) => {
       unsubUsers();
       unsubFarmerInventory();
       unsubInventoryLogs();
+      unsubSettings();
     };
   }, []);
+
+  const updateAppConfig = async (newConfig) => {
+    await setDoc(doc(db, 'settings', 'app_config'), { ...appConfig, ...newConfig }, { merge: true });
+  };
 
   // Auth functions
   const login = (role, inputPhone, inputPin) => {
@@ -289,7 +300,8 @@ export const AppProvider = ({ children }) => {
       farmLogs, addFarmLog,
       batches, addBatch,
       users, addUser, updateUser, deleteUser,
-      bannedIngredients
+      bannedIngredients,
+      appConfig, updateAppConfig
     }}>
       {children}
     </AppContext.Provider>

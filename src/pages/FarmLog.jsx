@@ -2,6 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, Camera, Mic, Tractor, Droplet, Bug, Scissors, Wheat, X, MapPin } from 'lucide-react';
 
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // metres
+  const phi1 = lat1 * Math.PI/180;
+  const phi2 = lat2 * Math.PI/180;
+  const deltaPhi = (lat2-lat1) * Math.PI/180;
+  const deltaLam = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLam/2) * Math.sin(deltaLam/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 const ACTION_TYPES = [
   { id: 'lam_dat', name: 'Làm đất', icon: Tractor, color: '#3B82F6' },
   { id: 'gieo_hat', name: 'Gieo hạt', icon: Sprout, color: '#10B981' },
@@ -16,7 +29,7 @@ import { Sprout } from 'lucide-react';
 
 
 const FarmLog = () => {
-  const { farmLogs, addFarmLog, plantingZones, inventory, farmerInventory, addFarmerInventoryItem, user, users } = useAppContext();
+  const { farmLogs, addFarmLog, plantingZones, inventory, farmerInventory, addFarmerInventoryItem, user, users, appConfig } = useAppContext();
   const [showAddLog, setShowAddLog] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -84,6 +97,35 @@ const FarmLog = () => {
       return;
     }
 
+    const selectedZone = plantingZones.find(z => z.puc_code === formData.puc_code);
+    let isGpsViolated = false;
+    let isItemViolated = false;
+    let vReason = '';
+    
+    if (selectedZone && selectedZone.gps_coordinates && formData.location && formData.location !== 'loading') {
+      const [zLat, zLng] = selectedZone.gps_coordinates.split(',').map(Number);
+      if (!isNaN(zLat) && !isNaN(zLng)) {
+        const distance = haversineDistance(formData.location.lat, formData.location.lng, zLat, zLng);
+        if (distance > 500) {
+          isGpsViolated = true;
+          vReason = `Vị trí chụp ảnh cách xa vùng trồng ${Math.round(distance)}m`;
+        }
+      }
+    }
+
+    if (formData.inventory_item_id) {
+       const globalItem = inventory.find(i => i.id === formData.inventory_item_id);
+       if (!globalItem) {
+         isItemViolated = true;
+         vReason = vReason ? vReason + ' & Sử dụng thuốc mua ngoài' : 'Sử dụng vật tư mua ngoài';
+       }
+    }
+
+    if ((isGpsViolated || isItemViolated) && appConfig?.strict_mode) {
+      setErrorMsg(`LỖI KỶ LUẬT NGHIÊM NGẶT!\n${vReason}. Hệ thống từ chối lưu nhật ký để đảm bảo tính minh bạch.`);
+      return;
+    }
+
     try {
       await addFarmLog({
         cropName: formData.cropName,
@@ -96,7 +138,9 @@ const FarmLog = () => {
         operator_name: user?.name,
         photo_url: formData.photo_url,
         notes: formData.notes,
-        location: formData.location !== 'loading' ? formData.location : null
+        location: formData.location !== 'loading' ? formData.location : null,
+        is_violation: isGpsViolated || isItemViolated,
+        violation_reason: vReason
       });
       setShowAddLog(false);
       setSelectedAction(null);
@@ -209,6 +253,10 @@ const FarmLog = () => {
                   alert('AI trả về mã không hợp lệ. Vui lòng chọn thủ công.');
                 }
               } else if (data.newItem) {
+                if (appConfig?.strict_mode) {
+                   alert(`LỖI KỶ LUẬT NGHIÊM NGẶT!\n\nAI nhận diện đây là loại mua ngoài: "${data.newItem.item_name}". Hệ thống từ chối cho phép sử dụng vật tư không do HTX cấp!`);
+                   return;
+                }
                 const confirmAdd = window.confirm(`⚠️ Cảnh báo: Việc sử dụng thuốc không do Admin HTX cấp phép/phân phối có thể làm lô hàng không đạt chuẩn xuất khẩu.\n\nAI nhận diện đây là loại mua ngoài: "${data.newItem.item_name}". Bạn có chắc chắn muốn tiếp tục sử dụng không?`);
                 if (confirmAdd) {
                   const newItemData = {

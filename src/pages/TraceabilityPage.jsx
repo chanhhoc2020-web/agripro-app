@@ -7,7 +7,7 @@ import { MapPin, Sprout, ShieldCheck, CheckCircle2 } from 'lucide-react';
 const TraceabilityPage = () => {
   const { hash } = useParams();
   const [searchParams] = useSearchParams();
-  const { plantingZones, farmLogs, inventory, batches, addBatch, farmerInventory } = useAppContext();
+  const { plantingZones, farmLogs, inventory, batches, addBatch, farmerInventory, appConfig } = useAppContext();
 
   // Retrieve data from URL query params (if scanned by phone) or local storage
   const urlPuc = searchParams.get('puc');
@@ -162,7 +162,23 @@ const TraceabilityPage = () => {
                 }
                 
                 if (hasPhiWarning) {
+                  if (appConfig?.strict_mode) {
+                    alert('LỖI KỶ LUẬT NGHIÊM NGẶT!\n\nPhát hiện vi phạm an toàn cách ly (PHI). Hệ thống từ chối phát hành mã QR!');
+                    return;
+                  }
                   if (!window.confirm(warningMessage)) return;
+                }
+                
+                const batchViolations = logs.filter(l => {
+                  const logTime = new Date(l.timestamp).getTime();
+                  const start = new Date(formData.startDate).getTime();
+                  const end = new Date(formData.harvestDate).getTime() + 86400000;
+                  return logTime >= start && logTime <= end && l.is_violation;
+                });
+                
+                if (batchViolations.length > 0 && appConfig?.strict_mode) {
+                  alert(`LỖI KỶ LUẬT NGHIÊM NGẶT!\n\nLô hàng này có chứa vi phạm: ${batchViolations[0].violation_reason}. Hệ thống từ chối phát hành mã QR!`);
+                  return;
                 }
 
                 const newHash = 'BATCH-' + Date.now().toString(36).toUpperCase();

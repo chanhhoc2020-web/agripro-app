@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext';
 import { Plus, User, MapPin, Key, Trash2, Edit } from 'lucide-react';
 
 const UsersManagement = () => {
-  const { users, addUser, updateUser, deleteUser, plantingZones } = useAppContext();
+  const { users, addUser, updateUser, deleteUser, plantingZones, farmLogs } = useAppContext();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   
@@ -77,6 +77,7 @@ const UsersManagement = () => {
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Số ĐT (Tài khoản)</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Mã PIN</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Mã vùng trồng cấp phép</th>
+              <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Điểm Tín Nhiệm</th>
               <th style={{ padding: 'var(--spacing-4)', fontWeight: 600 }}>Thao tác</th>
             </tr>
           </thead>
@@ -110,6 +111,24 @@ const UsersManagement = () => {
                       ) : (
                         <span style={{ color: 'var(--danger)' }}>Chưa gán / Lỗi</span>
                       )}
+                    </td>
+                    <td style={{ padding: 'var(--spacing-4)' }}>
+                      {(() => {
+                        const userLogs = farmLogs.filter(l => l.operator_name === user.name);
+                        const violationsCount = userLogs.filter(l => l.is_violation).length;
+                        const validCount = userLogs.length - violationsCount;
+                        const creditScore = 100 + (validCount * 2) - (violationsCount * 15);
+                        let scoreColor = 'var(--success)';
+                        if (creditScore < 80) scoreColor = 'var(--warning)';
+                        if (creditScore < 50) scoreColor = 'var(--danger)';
+                        
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontWeight: 700, color: scoreColor, fontSize: '1.25rem' }}>{creditScore}</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>({validCount} đúng - {violationsCount} vi phạm)</span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: 'var(--spacing-4)' }}>
                       <div className="flex gap-2">

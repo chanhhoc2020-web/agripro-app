@@ -1,9 +1,9 @@
 import React from 'react';
 import { useAppContext } from '../context/AppContext';
-import { MapPin, Package, ClipboardList, AlertTriangle } from 'lucide-react';
+import { MapPin, Package, ClipboardList, AlertTriangle, ShieldAlert } from 'lucide-react';
 
 const Dashboard = () => {
-  const { plantingZones, inventory, farmLogs, user } = useAppContext();
+  const { plantingZones, inventory, farmLogs, user, appConfig, updateAppConfig } = useAppContext();
 
   const activeZones = plantingZones.filter(z => z.status === 'Active').length;
   const lowStockItems = inventory.filter(i => i.current_stock <= i.min_threshold).length;
@@ -30,7 +30,33 @@ const Dashboard = () => {
 
   return (
     <div className="animate-fade-in">
-      <h2 style={{ marginBottom: 'var(--spacing-6)' }}>Tổng quan Hệ thống</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 style={{ margin: 0 }}>Tổng quan Hệ thống</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)', backgroundColor: 'var(--surface)', padding: 'var(--spacing-2) var(--spacing-4)', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-sm)' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: appConfig?.strict_mode ? 'var(--danger)' : 'var(--text-secondary)' }}>
+            Kỷ luật Nghiêm ngặt
+          </span>
+          <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px' }}>
+            <input 
+              type="checkbox" 
+              style={{ opacity: 0, width: 0, height: 0 }} 
+              checked={appConfig?.strict_mode || false}
+              onChange={(e) => updateAppConfig({ strict_mode: e.target.checked })}
+            />
+            <span style={{
+              position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: appConfig?.strict_mode ? 'var(--danger)' : '#ccc',
+              transition: '.4s', borderRadius: '34px'
+            }}>
+              <span style={{
+                position: 'absolute', content: '""', height: '18px', width: '18px', left: '3px', bottom: '3px',
+                backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
+                transform: appConfig?.strict_mode ? 'translateX(20px)' : 'translateX(0)'
+              }}></span>
+            </span>
+          </label>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ marginBottom: 'var(--spacing-6)' }}>
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-4)' }}>
@@ -74,6 +100,44 @@ const Dashboard = () => {
         ) : (
           <p style={{ color: 'var(--text-secondary)' }}>Không có cảnh báo nào.</p>
         )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 'var(--spacing-6)' }}>
+        <h3 style={{ marginBottom: 'var(--spacing-4)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <ShieldAlert color="var(--danger)" /> Bảng Phong Thần (Giám sát Vi phạm)
+        </h3>
+        {(() => {
+          const violations = farmLogs.filter(log => log.is_violation);
+          if (violations.length === 0) {
+            return <p style={{ color: 'var(--text-secondary)' }}>Không có nông dân nào vi phạm quy định.</p>;
+          }
+          return (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--background)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                    <th style={{ padding: '12px' }}>Thời gian</th>
+                    <th style={{ padding: '12px' }}>Nông dân</th>
+                    <th style={{ padding: '12px' }}>Vùng trồng</th>
+                    <th style={{ padding: '12px' }}>Vật tư liên quan</th>
+                    <th style={{ padding: '12px' }}>Lỗi vi phạm</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {violations.map(v => (
+                    <tr key={v.log_id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '12px' }}>{new Date(v.timestamp).toLocaleString('vi-VN')}</td>
+                      <td style={{ padding: '12px', fontWeight: 600 }}>{v.operator_name}</td>
+                      <td style={{ padding: '12px' }}>{v.puc_code}</td>
+                      <td style={{ padding: '12px' }}>{v.item_name_text || v.inventory_item_id}</td>
+                      <td style={{ padding: '12px', color: 'var(--danger)', fontWeight: 500 }}>{v.violation_reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="card">
