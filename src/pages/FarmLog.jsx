@@ -16,7 +16,7 @@ import { Sprout } from 'lucide-react';
 
 
 const FarmLog = () => {
-  const { farmLogs, addFarmLog, plantingZones, inventory, farmerInventory, user, users } = useAppContext();
+  const { farmLogs, addFarmLog, plantingZones, inventory, farmerInventory, addFarmerInventoryItem, user, users } = useAppContext();
   const [showAddLog, setShowAddLog] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -215,8 +215,31 @@ const FarmLog = () => {
                 } else {
                   alert('AI trả về mã không hợp lệ. Vui lòng chọn thủ công.');
                 }
+              } else if (data.newItem) {
+                const confirmAdd = window.confirm(`⚠️ Cảnh báo: Việc sử dụng thuốc không do Admin HTX cấp phép/phân phối có thể làm lô hàng không đạt chuẩn xuất khẩu.\n\nAI nhận diện đây là loại mua ngoài: "${data.newItem.item_name}". Bạn có chắc chắn muốn tiếp tục sử dụng không?`);
+                if (confirmAdd) {
+                  const newItemData = {
+                    farmer_id: user?.id,
+                    item_name: data.newItem.item_name || 'Vật tư chưa rõ tên',
+                    category: data.newItem.category || filterCategory,
+                    active_ingredient: data.newItem.active_ingredient || '',
+                    supplier: data.newItem.supplier || '',
+                    purpose: data.newItem.purpose || '',
+                    phi_days: data.newItem.phi_days ? Number(data.newItem.phi_days) : 7,
+                    current_stock: 0,
+                    min_threshold: 0,
+                    unit: 'Gói/Chai',
+                  };
+                  
+                  addFarmerInventoryItem(newItemData).then(newId => {
+                    if (newId) {
+                      setFormData(prev => ({ ...prev, inventory_item_id: newId, item_name_text: '' }));
+                      alert(`Đã tự động tạo vật tư "${newItemData.item_name}" vào Kho cá nhân với thời gian cách ly là ${newItemData.phi_days} ngày.`);
+                    }
+                  }).catch(e => alert("Lỗi khi tạo vật tư tự động: " + e.message));
+                }
               } else {
-                alert('AI không tìm thấy vật tư nào khớp với ảnh. Vui lòng chọn thủ công.');
+                alert('AI không tìm thấy thông tin trên bao bì. Vui lòng nhập thủ công.');
               }
             })
             .catch(err => {

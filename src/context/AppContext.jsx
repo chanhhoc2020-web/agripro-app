@@ -162,7 +162,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const addFarmerInventoryItem = async (item) => {
-    await addDoc(collection(db, 'farmer_inventory'), item);
+    const docRef = await addDoc(collection(db, 'farmer_inventory'), item);
+    return docRef.id;
   };
 
   const updateFarmerStock = async (id, quantityChange) => {
