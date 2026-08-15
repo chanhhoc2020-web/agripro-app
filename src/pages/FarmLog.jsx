@@ -360,7 +360,7 @@ const FarmLog = () => {
               <>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                    Vật tư (Kho cá nhân) / Tên (Nhập tay)
+                    Vật tư (Kho cá nhân)
                     {isScanning && <span style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>Đang quét AI...</span>}
                   </label>
                   <select 
@@ -375,18 +375,8 @@ const FarmLog = () => {
                     ))}
                   </select>
                   
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>HOẶC</div>
-                  
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    style={{ padding: '12px', fontSize: '1rem' }} 
-                    placeholder="Gõ tên vật tư (Nếu không có trong kho)"
-                    value={formData.item_name_text}
-                    onChange={e => setFormData({...formData, item_name_text: e.target.value, inventory_item_id: ''})}
-                  />
                   {!(formData.inventory_item_id || formData.item_name_text) && (
-                    <span style={{ fontSize: '0.85rem', color: 'var(--danger)', marginTop: '4px', display: 'block' }}>Vui lòng chọn hoặc nhập tên vật tư</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--danger)', marginTop: '4px', display: 'block' }}>Vui lòng chọn hoặc chụp ảnh vật tư</span>
                   )}
                 </div>
                 <div className="input-group">
